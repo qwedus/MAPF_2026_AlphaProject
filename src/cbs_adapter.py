@@ -7,6 +7,7 @@ boundary.
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
@@ -194,6 +195,26 @@ def pad_paths(paths: Mapping[int, AgentPath]) -> dict[int, AgentPath]:
     return padded
 
 
+def save_internal_paths_json(
+    paths: Mapping[int, Sequence[GridLocation]],
+    save_path: str | Path,
+) -> Path:
+    """Save internal paths in a JSON format that simulator code can consume."""
+    payload = {
+        "coordinate_format": "row_col",
+        "paths": {
+            str(agent_id): [[int(row), int(col)] for row, col in path]
+            for agent_id, path in sorted(paths.items())
+        },
+    }
+    path = Path(save_path).resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2)
+        handle.write("\n")
+    return path
+
+
 class CBSAdapter:
     """Run atb033 CBS through YAML files and convert paths back to project format."""
 
@@ -299,4 +320,3 @@ def _validate_inputs(
                 )
             if _grid_value(grid_map, row, col) == 1:
                 raise ValueError(f"Agent {agent_id} {label} {(row, col)} is blocked.")
-
