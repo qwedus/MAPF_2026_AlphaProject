@@ -16,10 +16,52 @@
 """
 
 import argparse
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
+
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 
 from map_generator import generate_map, MAP_TYPES   # 역할 A
 from cbs_adapter import CBSAdapter, CBSAdapterConfig  # 역할 C (오픈소스 어댑터)
 from simulator import Simulator                        # 역할 B
+
+
+def animate_paths(grid_map, padded_paths, interval_ms=500):
+    """padded_paths(row,col)를 시간 순으로 재생하는 창을 띄운다."""
+    agent_ids = sorted(padded_paths.keys())
+    n_steps = max(len(padded_paths[aid]) for aid in agent_ids)
+    colors = plt.cm.tab10(np.linspace(0, 1, max(len(agent_ids), 1)))
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    ax.imshow(grid_map, cmap="Greys", origin="upper", vmin=0, vmax=1)
+    ax.set_xticks([]); ax.set_yticks([])
+
+    scat = ax.scatter([], [], s=200, edgecolors="black", zorder=3)
+    for aid, path in padded_paths.items():
+        goal = path[-1]
+        color_idx = agent_ids.index(aid)
+        ax.scatter(goal[1], goal[0], color=colors[color_idx], marker="*",
+                   s=350, edgecolors="black", zorder=2)
+    title = ax.set_title("")
+
+    def update(t):
+        positions = []
+        for aid in agent_ids:
+            path = padded_paths[aid]
+            r, c = path[t] if t < len(path) else path[-1]
+            positions.append((c, r))
+        scat.set_offsets(positions)
+        scat.set_color([colors[i] for i in range(len(agent_ids))])
+        title.set_text(f"t = {t}")
+        return scat, title
+
+    anim = FuncAnimation(fig, update, frames=n_steps, interval=interval_ms, blit=False, repeat=True)
+    plt.show()
+    return anim
 
 
 def run_pipeline(map_type: str, size: int, num_agents: int, seed: int, solver_root: str | None):
@@ -71,6 +113,7 @@ def parse_args():
         default=None,
         help="atb033 CBS 저장소 경로(cbs.py가 있는 폴더). 생략 시 third_party/... 기본 경로 자동 탐색.",
     )
+    parser.add_argument("--no-show", action="store_true", help="시뮬레이션 애니메이션 창을 띄우지 않음")
     return parser.parse_args()
 
 
@@ -87,3 +130,5 @@ if __name__ == "__main__":
         print("\n=== 최종 결과 요약 ===")
         for agent_id, path in result["padded_paths"].items():
             print(f"  agent{agent_id}: start={path[0]} -> goal={path[-1]}  (총 {len(path)} step)")
+        if not args.no_show:
+            animate_paths(result["grid_map"], result["padded_paths"])

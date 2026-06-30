@@ -16,8 +16,6 @@
 
 import json
 import numpy as np
-import matplotlib
-matplotlib.use("Agg")  # VS Code에서 화면에 바로 띄우려면 이 줄 삭제
 import matplotlib.pyplot as plt
 from collections import deque
 
