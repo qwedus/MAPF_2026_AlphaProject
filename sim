@@ -1,0 +1,107 @@
+import numpy as np
+
+class Simulator:
+    def __init__(self, map_size=(10, 10)):
+        self.map_size = map_size
+        # 행동 정의 약속 (0: 대기, 1: 상, 2: 하, 3: 좌, 4: 우)
+        self.actions = {
+            0: (0, 0),   # Wait
+            1: (0, 1),   # Up
+            2: (0, -1),  # Down
+            3: (-1, 0),  # Left
+            4: (1, 0)    # Right
+        }
+
+    def _get_agent_pos_at_t(self, path, t):
+        """해당 에이전트의 경로에서 t 시점의 (x, y) 좌표를 안전하게 가져오는 헬퍼 함수"""
+        if t < len(path):
+            return path[t]['x'], path[t]['y']
+        else:
+            return path[-1]['x'], path[-1]['y']
+
+    def validate_and_parse_paths(self, grid_3d, raw_cbs_solution):
+        """
+        단일 맵과 CBS 결과(딕셔너리)를 받아 검증 후 정수형 행동 배열을 반환합니다.
+        
+        - grid_3d: (3, 10, 10) Numpy Array (0번 채널: 벽)
+        - raw_cbs_solution: 오픈소스 CBS의 리턴값
+        """
+        if not raw_cbs_solution:
+            return None, False
+
+        wall_channel = grid_3d[0]
+        num_agents = len(raw_cbs_solution)
+        
+        # 전체 경로 중 가장 긴 시간(max_t) 계산
+        max_t = max([len(path) for path in raw_cbs_solution.values()])
+        max_time_step = max_t - 1
+        
+        # 모방학습용 정수형 행동 배열 초기화 (Shape: 시간, 로봇수) -> 초기값 0(대기)
+        action_array = np.zeros((max_time_step, num_agents), dtype=np.int64)
+
+        # 시간축(t)을 돌면서 검증 및 액션 추출
+        for t in range(max_t):
+            current_positions = []
+            
+            for agent_idx in range(num_agents):
+                agent_name = f"agent{agent_idx}"
+                path = raw_cbs_solution[agent_name]
+                
+                # 로봇의 현재(t) 위치 획득
+                curr_x, curr_y = self._get_agent_pos_at_t(path, t)
+                
+                # 1. 맵 경계 탈출 및 벽 충돌 검증 (Numpy 인덱싱은 [row, col] 즉 [y, x] 주의)
+                if curr_x < 0 or curr_x >= self.map_size[0] or curr_y < 0 or curr_y >= self.map_size[1]:
+                    print(f"❌ [에러] t={t}, {agent_name}이 맵 범위를 벗어났습니다: ({curr_x}, {curr_y})")
+                    return None, False
+                    
+                if wall_channel[curr_y, curr_x] == 1:
+                    print(f"❌ [에러] t={t}, {agent_name}이 벽({curr_x}, {curr_y})에 충돌했습니다!")
+                    return None, False
+                
+                # 2. 위치(Vertex) 충돌 검증 (같은 시간, 같은 칸에 두 마리가 있는지)
+                if (curr_x, curr_y) in current_positions:
+                    print(f"❌ [에러] t={t}, 위치({curr_x}, {curr_y})에서 로봇 간 충돌 발생!")
+                    return None, False
+                current_positions.append((curr_x, curr_y))
+                
+                # 3. 모방학습용 Action 인덱스 계산 (t -> t+1 이동)
+                if t < max_time_step and t < len(path) - 1:
+                    next_state = path[t+1]
+                    dx = next_state['x'] - curr_x
+                    dy = next_state['y'] - curr_y
+                    
+                    action = 0
+                    if dx == 0 and dy == 1:    action = 1  # 상
+                    elif dx == 0 and dy == -1: action = 2  # 하
+                    elif dx == -1 and dy == 0: action = 3  # 좌
+                    elif dx == 1 and dy == 0:  action = 4  # 우
+                    
+                    action_array[t, agent_idx] = action
+
+            # 4. 엣지(Edge) 충돌 검증 (t -> t+1 이동 시 서로 크로스(엇갈림) 되는지 체크)
+            if t < max_time_step:
+                for i in range(num_agents):
+                    for j in range(i + 1, num_agents):
+                        agent_a = f"agent{i}"
+                        agent_b = f"agent{j}"
+                        
+                        path_a = raw_cbs_solution[agent_a]
+                        path_b = raw_cbs_solution[agent_b]
+                        
+                        # 두 로봇의 t 시점 위치
+                        a_curr_x, a_curr_y = self._get_agent_pos_at_t(path_a, t)
+                        b_curr_x, b_curr_y = self._get_agent_pos_at_t(path_b, t)
+                        
+                        # 두 로봇의 t+1 시점 위치
+                        a_next_x, a_next_y = self._get_agent_pos_at_t(path_a, t + 1)
+                        b_next_x, b_next_y = self._get_agent_pos_at_t(path_b, t + 1)
+                        
+                        # A의 현재가 B의 다음 위치고, A의 다음 위치가 B의 현재 위치라면 엇갈림 충돌 발생!
+                        if (a_curr_x == b_next_x and a_curr_y == b_next_y) and \
+                           (a_next_x == b_curr_x and a_next_y == b_curr_y):
+                            print(f"❌ [에러] t={t} -> t={t+1}, {agent_a}와 {agent_b}가 서로 교차(Edge) 충돌했습니다! "
+                                  f"({a_curr_x},{a_curr_y}) ↔ ({b_curr_x},{b_curr_y})")
+                            return None, False
+
+        return action_array, True
