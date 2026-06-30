@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Generated CBS adapter examples
+outputs/paths/atb033_example/
