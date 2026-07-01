@@ -1,0 +1,11 @@
+{
+  "scenario_id": "scen_sparse",
+  "source_path": "/Users/beeen/code/mapf_alpha#1/MAPF_2026_AlphaProject/scenarios/scenario_sparse.json",
+  "success": true,
+  "num_agents": 3,
+  "makespan": 7,
+  "paths_json_path": "/Users/beeen/code/mapf_alpha#1/MAPF_2026_AlphaProject/outputs/paths/map_generator_smoke/scen_sparse/paths.json",
+  "input_yaml_path": "/Users/beeen/code/mapf_alpha#1/MAPF_2026_AlphaProject/outputs/paths/map_generator_smoke/scen_sparse/input.yaml",
+  "output_yaml_path": "/Users/beeen/code/mapf_alpha#1/MAPF_2026_AlphaProject/outputs/paths/map_generator_smoke/scen_sparse/output.yaml",
+  "error": null
+}
