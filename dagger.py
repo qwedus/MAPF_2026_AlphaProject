@@ -35,7 +35,7 @@ class MAPFSimulator(ABC):
 
     obs 포맷:
         {agent_id: {"grid": np.ndarray (3,5,5), "goal_dir": np.ndarray (2,)}}
-        - grid    : v0.2 표준 채널(빈공간/벽/로봇), float32
+        - grid    : v0.3 표준 채널(벽/다른로봇/다른agent목표, spec.CH_* 참고), float32
         - goal_dir: [goal_row - cur_row, goal_col - cur_col], 정규화 전 raw값
     """
 

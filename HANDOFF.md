@@ -1,12 +1,12 @@
 # MAPF Imitation Learning — 작업 인계 (Track 2)
 
-CBS-IL 공통 내부 표준 **v0.2** 기준.
+CBS-IL 공통 내부 표준 **v0.3** 기준. (v0.2 → v0.3: local grid 채널 재정의, [channel_spec_v0.3_notes.md](channel_spec_v0.3_notes.md) 참고)
 
 ---
 
 ## 1. 현재까지 한 것
 
-- v0.2 표준을 단일 소스(`spec.py`)로 코드화
+- v0.3 표준을 단일 소스(`spec.py`)로 코드화
 - `Dataset → Model → Train → Eval` 파이프라인 구현, **더미 데이터로 검증 완료**
 - MLP(77→5), CNN(5×5×3 grid + goal 결합) 둘 다 학습/평가 정상 동작 확인
 - `infer.py`   : 학습된 모델 추론 래퍼 구현
@@ -24,7 +24,7 @@ CBS-IL 공통 내부 표준 **v0.2** 기준.
 ## 2. 파일 구조
 
 ```
-spec.py      v0.2 표준 상수 + 검증 + CBS path→action 변환 + 더미 생성
+spec.py      v0.3 표준 상수 + 검증 + CBS path→action 변환 + 더미 생성
 dataset.py   npz 로더 (mlp/cnn 모드)
 model_mlp.py / model_cnn.py   ActionMLP, ActionCNN
 train.py     학습/평가 루프 (--mode mlp|cnn)
@@ -38,19 +38,19 @@ IL 브랜치엔 Track 2 코드만 둔다. Track 1 파일(`src/dataset_exporter.p
 가져오지 않고, 실제로 같이 돌려볼 때만 로컬에서 두 브랜치를 합쳐서 실행한다.
 
 각 파일 책임:
-- **spec.py** — 표준이 v0.3으로 바뀌면 **여기만** 수정.
+- **spec.py** — 표준이 v0.4로 바뀌면 **여기만** 수정.
 - **dagger.py** — `MAPFSimulator` ABC만 구현해주면 DAgger 루프는 그대로 동작. **주의**: 시뮬레이터 팀이 만든 `simulator.py`는 이 ABC를 구현하지 않음 (8-C 참고).
 
 ---
 
-## 3. v0.2 표준 요약
+## 3. v0.3 표준 요약
 
 | 항목 | 값 |
 |---|---|
 | 좌표 | (row, col), 원점 좌상단 (0,0) |
 | action | 0=상(-1,0) 1=하(1,0) 2=좌(0,-1) 3=우(0,1) 4=대기(0,0) |
 | state | 5×5×3 local grid + goal_dir 2 |
-| grid channel | 0=빈공간, 1=벽/장애물/맵밖, 2=다른 로봇 |
+| grid channel | 0=벽/장애물/맵밖, 1=다른 로봇, 2=다른 agent 목표 (내 목표는 goal_dir로 별도 제공, `spec.CH_*` 참고). 셋 다 0이면 빈공간 |
 | goal_dir | [goal_row-cur_row, goal_col-cur_col] |
 | npz key | states_grid (N,3,5,5) / goal_dirs (N,2) / actions (N,) |
 | MLP 입력 | grid flatten 75 + goal 2 = **77** |
@@ -110,6 +110,9 @@ export_expert_paths_npz(grid_map, goals, paths, "real_v02.npz")
 
 - Track 1 `src/dataset_exporter.py` / `src/expert_handoff.py` 에 구현되어 있음 — spec.py v0.2 표준과 호환 확인됨
 - `goals`/`paths` 포맷은 `{agent_id: (r,c)}` dict 또는 순서 있는 리스트 모두 허용
+- **주의**: 위 두 파일은 아직 v0.2 채널 정의(0=빈공간/1=벽/2=다른로봇) 기준으로 만들어져 있음.
+  v0.3(빈공간 채널 제거 + 다른 agent 목표 채널 추가)로 갱신하는 작업은 아직 Track 1에 요청 중.
+  자세한 내용은 [channel_spec_v0.3_notes.md](channel_spec_v0.3_notes.md) 참고.
 
 ### B. 실데이터 성능 평가
 
@@ -139,6 +142,6 @@ export_expert_paths_npz(grid_map, goals, paths, "real_v02.npz")
 ## 8. 주의사항
 
 - npz key/shape는 **반드시 `spec.py` 상수 사용**. 직접 문자열 쓰지 말 것.
-- 표준 변경(v0.3 등)은 `spec.py`에서만. 다른 파일은 spec을 import해서 참조.
+- 표준 변경(v0.4 등)은 `spec.py`에서만. 다른 파일은 spec을 import해서 참조.
 - 체크포인트(`.pt`)에 `goal_mean`/`goal_std` 포함됨 — `infer.py`, `eval.py`가 이를 이용해 동일 정규화 보장.
 - `.pt`, `.npz` 파일은 `.gitignore`에 포함됨 — 대용량 데이터/모델은 별도 공유.
