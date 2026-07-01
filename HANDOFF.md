@@ -9,10 +9,10 @@ CBS-IL 공통 내부 표준 **v0.2** 기준.
 - v0.2 표준을 단일 소스(`spec.py`)로 코드화
 - `Dataset → Model → Train → Eval` 파이프라인 구현, **더미 데이터로 검증 완료**
 - MLP(77→5), CNN(5×5×3 grid + goal 결합) 둘 다 학습/평가 정상 동작 확인
-- `extract.py` : CBS path + 맵 → v0.2 npz 변환기 구현
 - `infer.py`   : 학습된 모델 추론 래퍼 구현
 - `eval.py`    : confusion matrix + per-action precision/recall 평가 구현
 - `dagger.py`  : DAgger 루프 + 시뮬레이터 인터페이스(ABC) 구현
+- 자체 `extract.py`는 제거함 — Track 1이 동일 기능(`src/dataset_exporter.py`, `src/expert_handoff.py`)을 이미 구현해서 제공 중. 실제 학습 실행 시점에 Track 1 브랜치와 합쳐서 쓰면 되므로 그 파일들은 IL 브랜치에 가져오지 않음 (8-A 참고)
 
 > 더미 검증 결과 (의미 있는 성능 아님, "코드가 안 터진다"는 확인용)
 > - 무작위 기준 acc = 0.200
@@ -26,18 +26,20 @@ CBS-IL 공통 내부 표준 **v0.2** 기준.
 ```
 spec.py      v0.2 표준 상수 + 검증 + CBS path→action 변환 + 더미 생성
 dataset.py   npz 로더 (mlp/cnn 모드)
-model.py     ActionMLP, ActionCNN
+model_mlp.py / model_cnn.py   ActionMLP, ActionCNN
 train.py     학습/평가 루프 (--mode mlp|cnn)
-extract.py   CBS path + 맵 → npz 변환기          ← Track 1 데이터 연결 시 사용
 infer.py     MAPFPredictor (predict/predict_batch)
 eval.py      confusion matrix + per-action 지표
-dagger.py    MAPFSimulator ABC + DAggerTrainer    ← 시뮬레이터 연결 시 사용
+dagger.py    MAPFSimulator ABC + DAggerTrainer    ← 시뮬레이터 연결 시 사용 (아직 미연동, 8-C 참고)
 ```
+
+IL 브랜치엔 Track 2 코드만 둔다. Track 1 파일(`src/dataset_exporter.py`,
+`src/expert_handoff.py`, `map_generator.py`, `simulator.py` 등)은 이 브랜치에
+가져오지 않고, 실제로 같이 돌려볼 때만 로컬에서 두 브랜치를 합쳐서 실행한다.
 
 각 파일 책임:
 - **spec.py** — 표준이 v0.3으로 바뀌면 **여기만** 수정.
-- **extract.py** — Track 1 CBS 경로를 받아서 npz로 변환. 실학습의 시작점.
-- **dagger.py** — `MAPFSimulator` ABC만 구현해주면 DAgger 루프는 그대로 동작.
+- **dagger.py** — `MAPFSimulator` ABC만 구현해주면 DAgger 루프는 그대로 동작. **주의**: 시뮬레이터 팀이 만든 `simulator.py`는 이 ABC를 구현하지 않음 (8-C 참고).
 
 ---
 
@@ -88,28 +90,38 @@ python eval.py --ckpt mlp.pt --npz dummy_v02.npz
 
 ## 6. 다음 할 일 (TODO)
 
-### A. CBS GT 연결 (Track 1 팀에서 데이터 받은 직후)
+### A. CBS GT 연결 (Track 1 팀에서 데이터 받은 직후) — **완료 (Track 1 코드 사용)**
+
+자체 `extract.py`는 제거했다. Track 1이 동일 기능을 이미 구현해서 제공 중이므로,
+실행 시점에 Track 1 브랜치(또는 그쪽 파일)를 로컬에서 같이 두고 아래처럼 쓴다.
+그 파일들 자체는 IL 브랜치에 커밋하지 않는다.
 
 ```python
-from extract import extract_dataset, save_dataset
-ds = extract_dataset(map_grid, agent_paths, agent_goals)
-save_dataset(ds, "real_v02.npz")
+# 1) CBS expert handoff JSON -> v0.2 npz (권장 경로)
+from src.expert_handoff import export_handoff_npz
+export_handoff_npz("outputs/paths/<scenario_id>/expert_handoff.json", "real_v02.npz")
+
+# 2) map_grid/goals/paths를 직접 갖고 있는 경우
+from src.dataset_exporter import export_expert_paths_npz
+export_expert_paths_npz(grid_map, goals, paths, "real_v02.npz")
+
 # python train.py --mode mlp --npz real_v02.npz
 ```
 
-- `agent_paths` : `{agent_id: [(r,c), ...]}` 형식 (시간 순 위치 목록)
-- `agent_goals` : `{agent_id: (goal_r, goal_c)}`
-- local grid 추출기는 `extract.py`에 구현되어 있음 (**완료**)
+- Track 1 `src/dataset_exporter.py` / `src/expert_handoff.py` 에 구현되어 있음 — spec.py v0.2 표준과 호환 확인됨
+- `goals`/`paths` 포맷은 `{agent_id: (r,c)}` dict 또는 순서 있는 리스트 모두 허용
 
 ### B. 실데이터 성능 평가
 
 - MLP vs CNN 실성능 비교 (`eval.py` 사용)
 - 대기(4) action 편향 확인 (실데이터에서는 분포가 고름이어야 함)
 
-### C. DAgger (시뮬레이터 팀 연동)
+### C. DAgger (시뮬레이터 팀 연동) — **미완료**
 
-- 시뮬레이터 팀이 `MAPFSimulator` ABC를 구현해서 전달
-- `dagger.py`의 `DAggerTrainer`에 꽂으면 바로 실행 가능
+- 시뮬레이터 팀이 만든 `simulator.py`의 `Simulator`는 완성된 CBS 경로를 통째로
+  검증하는 배치 검증기이고, `dagger.py`가 요구하는 `MAPFSimulator` ABC(`reset`/
+  `step`/`get_expert_actions`, step 단위 상호작용)를 구현하지 않음 — 재요청 필요
+- ABC 구현본을 받으면 `dagger.py`의 `DAggerTrainer`에 꽂으면 바로 실행 가능
 - 인터페이스 상세는 `README.md` 및 `dagger.py` 참고
 
 ---
