@@ -15,13 +15,19 @@ class DatasetExporterTests(unittest.TestCase):
     def test_extract_state_action_pairs_from_paths(self) -> None:
         grid_map = np.array(
             [
-                [0, 1, 0],
-                [0, 0, 0],
+                [0, 1, 0, 0, 0],
+                [0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0],
             ],
             dtype=np.uint8,
         )
-        goals = {0: (1, 2)}
-        paths = {0: [(0, 0), (1, 0), (1, 1), (1, 2)]}
+        goals = {0: (1, 3), 1: (2, 4)}
+        paths = {
+            0: [(2, 2), (2, 3), (1, 3)],
+            1: [(2, 4), (2, 4), (2, 4)],
+        }
 
         states_grid, goal_dirs, actions = extract_state_action_pairs(
             grid_map,
@@ -29,18 +35,23 @@ class DatasetExporterTests(unittest.TestCase):
             paths,
         )
 
-        self.assertEqual(states_grid.shape, (3, 2, 2, 3))
-        self.assertEqual(goal_dirs.tolist(), [[1, 1], [0, 1], [0, 1]])
+        self.assertEqual(states_grid.shape, (4, 3, 5, 5))
+        self.assertEqual(
+            goal_dirs.tolist(),
+            [[-1.0, 1.0], [-1.0, 0.0], [0.0, 0.0], [0.0, 0.0]],
+        )
         self.assertEqual(
             actions.tolist(),
             [
-                ACTION_TO_ID["down"],
                 ACTION_TO_ID["right"],
-                ACTION_TO_ID["right"],
+                ACTION_TO_ID["up"],
+                ACTION_TO_ID["wait"],
+                ACTION_TO_ID["wait"],
             ],
         )
-        self.assertEqual(states_grid[0, 0].tolist(), grid_map.tolist())
-        self.assertEqual(states_grid[0, 1, 0, 0], 1.0)
+        self.assertEqual(states_grid[0, 1, 0, 1], 1.0)  # wall at global (0, 1)
+        self.assertEqual(states_grid[0, 2, 2, 4], 1.0)  # agent 1 at global (2, 4)
+        self.assertEqual(states_grid[0, 0, 2, 2], 1.0)  # current agent cell is free
 
     def test_extract_state_action_pairs_rejects_non_neighbor_move(self) -> None:
         with self.assertRaisesRegex(ValueError, "Unsupported move"):
@@ -57,7 +68,7 @@ class DatasetExporterTests(unittest.TestCase):
             {0: [(0, 0)]},
         )
 
-        self.assertEqual(states_grid.shape, (0, 2, 2, 2))
+        self.assertEqual(states_grid.shape, (0, 3, 5, 5))
         self.assertEqual(goal_dirs.shape, (0, 2))
         self.assertEqual(actions.shape, (0,))
 
@@ -71,8 +82,8 @@ class DatasetExporterTests(unittest.TestCase):
             )
             data = np.load(output_path)
 
-        self.assertEqual(data["states_grid"].shape, (1, 2, 2, 2))
-        self.assertEqual(data["goal_dirs"].tolist(), [[0, 1]])
+        self.assertEqual(data["states_grid"].shape, (1, 3, 5, 5))
+        self.assertEqual(data["goal_dirs"].tolist(), [[0.0, 1.0]])
         self.assertEqual(data["actions"].tolist(), [ACTION_TO_ID["right"]])
 
 

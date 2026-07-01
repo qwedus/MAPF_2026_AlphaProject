@@ -67,7 +67,7 @@ def create_atb033_input(
     _validate_inputs(grid_map, starts, goals)
 
     obstacles = [
-        internal_to_atb033((row, col))
+        tuple(internal_to_atb033((row, col)))
         for row in range(height)
         for col in range(width)
         if _grid_value(grid_map, row, col) == 1

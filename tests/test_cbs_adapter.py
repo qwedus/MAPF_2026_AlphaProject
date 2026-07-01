@@ -33,10 +33,10 @@ class CBSAdapterFormatTests(unittest.TestCase):
             create_atb033_input(grid_map, starts, goals, input_path)
 
             with input_path.open("r", encoding="utf-8") as handle:
-                payload = yaml.safe_load(handle)
+                payload = yaml.load(handle, Loader=yaml.FullLoader)
 
         self.assertEqual(payload["map"]["dimensions"], [3, 2])
-        self.assertEqual(payload["map"]["obstacles"], [[1, 0]])
+        self.assertEqual(payload["map"]["obstacles"], [(1, 0)])
         self.assertEqual(
             payload["agents"],
             [

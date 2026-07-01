@@ -1,0 +1,11 @@
+{
+  "scenario_id": "scen_maze",
+  "source_path": "/Users/beeen/code/mapf_alpha#1/MAPF_2026_AlphaProject/scenarios/scenario_maze.json",
+  "success": true,
+  "num_agents": 3,
+  "makespan": 46,
+  "paths_json_path": "/Users/beeen/code/mapf_alpha#1/MAPF_2026_AlphaProject/outputs/paths/map_generator_smoke/scen_maze/paths.json",
+  "input_yaml_path": "/Users/beeen/code/mapf_alpha#1/MAPF_2026_AlphaProject/outputs/paths/map_generator_smoke/scen_maze/input.yaml",
+  "output_yaml_path": "/Users/beeen/code/mapf_alpha#1/MAPF_2026_AlphaProject/outputs/paths/map_generator_smoke/scen_maze/output.yaml",
+  "error": null
+}

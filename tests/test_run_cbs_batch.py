@@ -166,13 +166,34 @@ class RunCBSBatchTests(unittest.TestCase):
                     encoding="utf-8"
                 )
             )
+            handoff_payload = json.loads(
+                (output_dir / "scenario_0001" / "expert_handoff.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            dataset = np.load(output_dir / "scenario_0001" / "expert_dataset.npz")
 
         self.assertEqual(failures, 0)
         self.assertEqual(paths_payload["coordinate_format"], "row_col")
         self.assertEqual(paths_payload["paths"], {"0": [[0, 0], [0, 1]]})
+        self.assertEqual(handoff_payload["schema_version"], "cbs_il_handoff_v0.2")
+        self.assertEqual(handoff_payload["agents"]["0"]["goal"], [0, 1])
+        self.assertTrue(handoff_payload["validation"]["success"])
+        self.assertEqual(dataset["states_grid"].shape, (1, 3, 5, 5))
+        self.assertEqual(dataset["goal_dirs"].tolist(), [[0.0, 1.0]])
+        self.assertEqual(dataset["actions"].tolist(), [3])
         self.assertTrue(status_payload["success"])
         self.assertEqual(status_payload["num_agents"], 1)
         self.assertEqual(status_payload["makespan"], 2)
+        self.assertTrue(status_payload["validation"]["success"])
+        self.assertEqual(
+            Path(status_payload["expert_handoff_json_path"]).name,
+            "expert_handoff.json",
+        )
+        self.assertEqual(
+            Path(status_payload["expert_dataset_npz_path"]).name,
+            "expert_dataset.npz",
+        )
 
 
 if __name__ == "__main__":
