@@ -9,10 +9,10 @@ CBS-IL 공통 내부 표준 **v0.2** 기준.
 - v0.2 표준을 단일 소스(`spec.py`)로 코드화
 - `Dataset → Model → Train → Eval` 파이프라인 구현, **더미 데이터로 검증 완료**
 - MLP(77→5), CNN(5×5×3 grid + goal 결합) 둘 다 학습/평가 정상 동작 확인
+- `extract.py` : CBS path + 맵 → v0.2 npz 변환기 구현
 - `infer.py`   : 학습된 모델 추론 래퍼 구현
 - `eval.py`    : confusion matrix + per-action precision/recall 평가 구현
 - `dagger.py`  : DAgger 루프 + 시뮬레이터 인터페이스(ABC) 구현
-- Track 1 `src/dataset_exporter.py`, `src/expert_handoff.py` : CBS path + 맵 → v0.2 npz 변환기 (자체 `extract.py`는 제거하고 이쪽으로 통합)
 
 > 더미 검증 결과 (의미 있는 성능 아님, "코드가 안 터진다"는 확인용)
 > - 무작위 기준 acc = 0.200
@@ -26,20 +26,18 @@ CBS-IL 공통 내부 표준 **v0.2** 기준.
 ```
 spec.py      v0.2 표준 상수 + 검증 + CBS path→action 변환 + 더미 생성
 dataset.py   npz 로더 (mlp/cnn 모드)
-model_mlp.py / model_cnn.py   ActionMLP, ActionCNN
+model.py     ActionMLP, ActionCNN
 train.py     학습/평가 루프 (--mode mlp|cnn)
+extract.py   CBS path + 맵 → npz 변환기          ← Track 1 데이터 연결 시 사용
 infer.py     MAPFPredictor (predict/predict_batch)
 eval.py      confusion matrix + per-action 지표
-dagger.py    MAPFSimulator ABC + DAggerTrainer    ← 시뮬레이터 연결 시 사용 (아직 미연동, 8-C 참고)
-
-src/dataset_exporter.py   CBS path + 맵 → npz 변환기 (Track 1 제공)   ← 실학습 시작점
-src/expert_handoff.py     CBS→IL 핸드오프 JSON → npz 변환 (Track 1 제공)
+dagger.py    MAPFSimulator ABC + DAggerTrainer    ← 시뮬레이터 연결 시 사용
 ```
 
 각 파일 책임:
 - **spec.py** — 표준이 v0.3으로 바뀌면 **여기만** 수정.
-- **src/dataset_exporter.py / src/expert_handoff.py** — Track 1 CBS 경로를 받아서 npz로 변환. 실학습의 시작점 (자체 `extract.py`는 제거하고 이쪽으로 통합).
-- **dagger.py** — `MAPFSimulator` ABC만 구현해주면 DAgger 루프는 그대로 동작. **주의**: 지금 온 `simulator.py`는 이 ABC를 구현하지 않음 (8-C 참고).
+- **extract.py** — Track 1 CBS 경로를 받아서 npz로 변환. 실학습의 시작점.
+- **dagger.py** — `MAPFSimulator` ABC만 구현해주면 DAgger 루프는 그대로 동작.
 
 ---
 
@@ -90,36 +88,28 @@ python eval.py --ckpt mlp.pt --npz dummy_v02.npz
 
 ## 6. 다음 할 일 (TODO)
 
-### A. CBS GT 연결 (Track 1 팀에서 데이터 받은 직후) — **완료**
-
-자체 `extract.py`는 제거하고 Track 1이 제공하는 진입점으로 통합했다.
+### A. CBS GT 연결 (Track 1 팀에서 데이터 받은 직후)
 
 ```python
-# 1) CBS expert handoff JSON -> v0.2 npz (권장 경로)
-from src.expert_handoff import export_handoff_npz
-export_handoff_npz("outputs/paths/<scenario_id>/expert_handoff.json", "real_v02.npz")
-
-# 2) map_grid/goals/paths를 직접 갖고 있는 경우
-from src.dataset_exporter import export_expert_paths_npz
-export_expert_paths_npz(grid_map, goals, paths, "real_v02.npz")
-
+from extract import extract_dataset, save_dataset
+ds = extract_dataset(map_grid, agent_paths, agent_goals)
+save_dataset(ds, "real_v02.npz")
 # python train.py --mode mlp --npz real_v02.npz
 ```
 
-- `src/dataset_exporter.py` : local grid 추출 + v0.2 npz 변환 (구 `extract.py`와 동일 로직, spec.py 표준과 호환 확인됨)
-- `src/expert_handoff.py` : CBS→IL 핸드오프 JSON(`expert_handoff.json`) → npz 변환
-- `goals`/`paths` 포맷은 `{agent_id: (r,c)}` dict 또는 순서 있는 리스트 모두 허용
+- `agent_paths` : `{agent_id: [(r,c), ...]}` 형식 (시간 순 위치 목록)
+- `agent_goals` : `{agent_id: (goal_r, goal_c)}`
+- local grid 추출기는 `extract.py`에 구현되어 있음 (**완료**)
 
 ### B. 실데이터 성능 평가
 
 - MLP vs CNN 실성능 비교 (`eval.py` 사용)
 - 대기(4) action 편향 확인 (실데이터에서는 분포가 고름이어야 함)
 
-### C. DAgger (시뮬레이터 팀 연동) — **미완료**
+### C. DAgger (시뮬레이터 팀 연동)
 
-- 현재 받은 `simulator.py`의 `Simulator`는 완성된 CBS 경로를 통째로 검증하는 배치 검증기(`validate_and_parse_paths`)이며, `dagger.py`가 요구하는 `MAPFSimulator` ABC(`reset`/`step`/`get_expert_actions`, step 단위 상호작용)를 구현하지 않음 — 그대로는 DAgger 루프를 못 돌림
-- 시뮬레이터 팀에 `MAPFSimulator` ABC 구현을 다시 요청 필요
-- `dagger.py`의 `DAggerTrainer`에 꽂으면 바로 실행 가능 (ABC만 맞으면)
+- 시뮬레이터 팀이 `MAPFSimulator` ABC를 구현해서 전달
+- `dagger.py`의 `DAggerTrainer`에 꽂으면 바로 실행 가능
 - 인터페이스 상세는 `README.md` 및 `dagger.py` 참고
 
 ---
