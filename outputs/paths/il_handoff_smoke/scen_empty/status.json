@@ -1,0 +1,28 @@
+{
+  "scenario_id": "scen_empty",
+  "source_path": "/Users/beeen/code/mapf_alpha#1/MAPF_2026_AlphaProject/scenarios/scenario_empty.json",
+  "success": true,
+  "num_agents": 3,
+  "makespan": 10,
+  "paths_json_path": "/Users/beeen/code/mapf_alpha#1/MAPF_2026_AlphaProject/outputs/paths/il_handoff_smoke/scen_empty/paths.json",
+  "expert_handoff_json_path": "/Users/beeen/code/mapf_alpha#1/MAPF_2026_AlphaProject/outputs/paths/il_handoff_smoke/scen_empty/expert_handoff.json",
+  "expert_dataset_npz_path": "/Users/beeen/code/mapf_alpha#1/MAPF_2026_AlphaProject/outputs/paths/il_handoff_smoke/scen_empty/expert_dataset.npz",
+  "validation": {
+    "success": true,
+    "no_blocked_cells": true,
+    "no_vertex_collisions": true,
+    "no_edge_collisions": true,
+    "blocked_or_outside": [],
+    "vertex_collisions": [],
+    "edge_collisions": [],
+    "path_lengths": {
+      "0": 10,
+      "1": 10,
+      "2": 10
+    },
+    "makespan": 10
+  },
+  "input_yaml_path": "/Users/beeen/code/mapf_alpha#1/MAPF_2026_AlphaProject/outputs/paths/il_handoff_smoke/scen_empty/input.yaml",
+  "output_yaml_path": "/Users/beeen/code/mapf_alpha#1/MAPF_2026_AlphaProject/outputs/paths/il_handoff_smoke/scen_empty/output.yaml",
+  "error": null
+}

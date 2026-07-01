@@ -51,6 +51,12 @@ Run CBS over a directory of scenarios:
 python scripts/run_cbs_batch.py --scenarios-dir inputs/scenarios --output-dir outputs/paths
 ```
 
+Convert one CBS expert handoff JSON to an IL v0.2 NPZ dataset:
+
+```bash
+python scripts/export_handoff_npz.py outputs/paths/<scenario_id>/expert_handoff.json
+```
+
 Run tests:
 
 ```bash
@@ -70,6 +76,8 @@ Typical files:
 - `input.yaml`: atb033 solver input
 - `output.yaml`: atb033 solver output
 - `paths.json`: simulator-facing internal `(row, col)` paths
+- `expert_handoff.json`: CBS-to-IL handoff artifact with map, goals, paths, and validation
+- `expert_dataset.npz`: IL v0.2 dataset with `states_grid`, `goal_dirs`, and `actions`
 - `status.json`: success/failure metadata
 
 Example scripts may write temporary smoke-test outputs to `/tmp` to avoid

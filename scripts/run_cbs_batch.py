@@ -34,6 +34,11 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.cbs_adapter import CBSAdapter, CBSAdapterConfig, save_internal_paths_json
+from src.expert_handoff import (
+    build_expert_handoff_payload,
+    export_handoff_npz,
+    save_expert_handoff_json,
+)
 from src.scenario_loader import load_map_generator_scenario
 
 try:
@@ -53,6 +58,7 @@ class Scenario:
     grid_map: list[list[int]] | np.ndarray
     starts: list[GridLocation]
     goals: list[GridLocation]
+    map_file: Path | None = None
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -123,6 +129,7 @@ def load_scenario(path: str | Path) -> Scenario:
             grid_map=grid_map,
             starts=starts,
             goals=goals,
+            map_file=_resolve_map_file(payload["map_file"], source_path),
         )
 
     grid_map = _extract_grid_map(payload)
@@ -133,6 +140,7 @@ def load_scenario(path: str | Path) -> Scenario:
         grid_map=grid_map,
         starts=starts,
         goals=goals,
+        map_file=None,
     )
 
 
@@ -175,6 +183,23 @@ def run_batch(
                 paths,
                 scenario_output_dir / "paths.json",
             )
+            handoff_payload = build_expert_handoff_payload(
+                scenario_id=scenario.scenario_id,
+                source_path=scenario.source_path,
+                grid_map=scenario.grid_map,
+                starts=scenario.starts,
+                goals=scenario.goals,
+                paths=paths,
+                map_file=scenario.map_file,
+            )
+            handoff_json_path = save_expert_handoff_json(
+                handoff_payload,
+                scenario_output_dir / "expert_handoff.json",
+            )
+            dataset_npz_path = export_handoff_npz(
+                handoff_json_path,
+                scenario_output_dir / "expert_dataset.npz",
+            )
             makespan = max((len(path) for path in paths.values()), default=0)
             status = {
                 "scenario_id": scenario.scenario_id,
@@ -183,6 +208,9 @@ def run_batch(
                 "num_agents": len(scenario.starts),
                 "makespan": makespan,
                 "paths_json_path": str(paths_json_path),
+                "expert_handoff_json_path": str(handoff_json_path),
+                "expert_dataset_npz_path": str(dataset_npz_path),
+                "validation": handoff_payload["validation"],
                 "input_yaml_path": str(adapter.last_run.input_yaml_path)
                 if adapter.last_run
                 else None,
@@ -201,6 +229,9 @@ def run_batch(
                 "num_agents": len(scenario.starts),
                 "makespan": None,
                 "paths_json_path": None,
+                "expert_handoff_json_path": None,
+                "expert_dataset_npz_path": None,
+                "validation": None,
                 "input_yaml_path": str(adapter.last_run.input_yaml_path)
                 if adapter.last_run
                 else None,
@@ -268,6 +299,22 @@ def _extract_grid_map(payload: dict[str, Any]) -> list[list[int]]:
             raise ValueError("Scenario grid rows must all have the same width.")
         normalized_grid.append(normalized_row)
     return normalized_grid
+
+
+def _resolve_map_file(map_file: str | Path, scenario_path: Path) -> Path:
+    map_path = Path(map_file)
+    candidates = [map_path] if map_path.is_absolute() else [
+        PROJECT_ROOT / map_path,
+        scenario_path.parent / map_path,
+    ]
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved.is_file():
+            return resolved
+    raise FileNotFoundError(
+        "Could not find scenario map_file. Tried: "
+        + ", ".join(str(candidate.resolve()) for candidate in candidates)
+    )
 
 
 def _extract_starts_goals(
