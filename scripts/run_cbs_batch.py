@@ -27,11 +27,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
+import numpy as np
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.cbs_adapter import CBSAdapter, CBSAdapterConfig, save_internal_paths_json
+from src.scenario_loader import load_map_generator_scenario
 
 try:
     import yaml
@@ -47,7 +50,7 @@ SUPPORTED_SCENARIO_SUFFIXES = {".json", ".yaml", ".yml"}
 class Scenario:
     scenario_id: str
     source_path: Path
-    grid_map: list[list[int]]
+    grid_map: list[list[int]] | np.ndarray
     starts: list[GridLocation]
     goals: list[GridLocation]
 
@@ -112,6 +115,16 @@ def load_scenario(path: str | Path) -> Scenario:
         raise ValueError(f"Scenario must be a mapping/object: {source_path}")
 
     scenario_id = str(payload.get("scenario_id") or source_path.stem)
+    if "map_file" in payload:
+        grid_map, starts, goals = load_map_generator_scenario(source_path)
+        return Scenario(
+            scenario_id=scenario_id,
+            source_path=source_path,
+            grid_map=grid_map,
+            starts=starts,
+            goals=goals,
+        )
+
     grid_map = _extract_grid_map(payload)
     starts, goals = _extract_starts_goals(payload)
     return Scenario(

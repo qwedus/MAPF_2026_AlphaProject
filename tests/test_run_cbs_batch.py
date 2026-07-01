@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import yaml
+import numpy as np
 
 from scripts.run_cbs_batch import discover_scenario_files, load_scenario, run_batch
 
@@ -83,6 +84,32 @@ class RunCBSBatchTests(unittest.TestCase):
             scenario = load_scenario(scenario_path)
 
         self.assertEqual(scenario.grid_map, [[0, 0], [1, 0]])
+
+    def test_load_scenario_accepts_map_generator_json(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            scenario_dir = Path(tmp_dir)
+            map_path = scenario_dir / "map_ex.npy"
+            np.save(map_path, np.zeros((2, 3), dtype=np.uint8))
+            scenario_path = scenario_dir / "scenario_ex.json"
+            scenario_path.write_text(
+                json.dumps(
+                    {
+                        "scenario_id": "scenario_ex",
+                        "map_file": "map_ex.npy",
+                        "agents": [
+                            {"agent_id": 0, "start": [2, 1], "goal": [0, 0]}
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            scenario = load_scenario(scenario_path)
+
+        self.assertEqual(scenario.scenario_id, "scenario_ex")
+        self.assertEqual(scenario.grid_map.shape, (2, 3))
+        self.assertEqual(scenario.starts, [(1, 2)])
+        self.assertEqual(scenario.goals, [(0, 0)])
 
     def test_load_scenario_rejects_missing_agents_and_goals(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
