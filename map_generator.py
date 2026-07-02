@@ -17,18 +17,8 @@
 import json
 import numpy as np
 import matplotlib
-matplotlib.use("Agg")  # VS Code에서 화면에 바로 띄우려면 이 줄 삭제
 import matplotlib.pyplot as plt
 from collections import deque
-
-
-# ===============================================================
-# 0. 좌표 변환 — CBS 표준의 핵심. 내보낼 때 여기 한 곳만 거친다.
-# ===============================================================
-def rc_to_xy(rc):
-    """내부 (row, col)  ->  CBS 표준 [x, y] = [col, row]."""
-    r, c = rc
-    return [int(c), int(r)]
 
 
 # ===============================================================
@@ -144,13 +134,12 @@ def generate_map(map_type="sparse", size=10, num_agents=3, seed=None):
 # 4. CBS 표준 Scenario JSON으로 저장 ([x, y]로 변환해서)
 # ===============================================================
 def to_scenario(grid_map, starts_rc, goals_rc, scenario_id, map_id, map_file):
-    """내부 (row,col) -> CBS 표준 [x,y]로 바꿔 scenario dict 생성."""
     agents = []
     for aid, (s, g) in enumerate(zip(starts_rc, goals_rc)):
         agents.append({
             "agent_id": aid,
-            "start": rc_to_xy(s),   # [x, y]
-            "goal":  rc_to_xy(g),   # [x, y]
+            "start": [int(s[0]), int(s[1])],   # (row, col)
+            "goal":  [int(g[0]), int(g[1])],   # (row, col)
         })
     return {
         "scenario_id": scenario_id,
@@ -198,29 +187,59 @@ def visualize(grid_map, starts_rc, goals_rc, title="", save_path=None):
 # ===============================================================
 # 6. 5종 한 번에 만들고 저장하는 헬퍼
 # ===============================================================
-def build_dataset(size=11, num_agents=3, base_seed=0, out_dir="scenarios"):
-    """5개 유형 맵을 만들어 grid(.npy) + scenario(.json)로 저장."""
+def build_dataset(sizes=[8, 11, 15], agent_counts=[2, 3, 5],
+                   base_seed=0, out_dir="scenarios"):
+    """맵 유형 × 크기 × 에이전트 수 전 조합을 생성."""
     import os
     os.makedirs(out_dir, exist_ok=True)
     results = {}
-    for i, mtype in enumerate(MAP_TYPES):
-        grid, s_rc, g_rc = generate_map(mtype, size=size,
-                                        num_agents=num_agents, seed=base_seed + i)
-        map_file = f"{out_dir}/map_{mtype}.npy"
-        save_grid(grid, map_file)
-        scen = to_scenario(grid, s_rc, g_rc,
-                           scenario_id=f"scen_{mtype}",
-                           map_id=mtype, map_file=map_file)
-        save_scenario(scen, f"{out_dir}/scenario_{mtype}.json")
-        results[mtype] = (grid, s_rc, g_rc, scen)
+    failed = []
+    seed = base_seed
+
+    for mtype in MAP_TYPES:
+        for size in sizes:
+            for n in agent_counts:
+                tag = f"{mtype}_s{size}_n{n}"
+                try:
+                    grid, s_rc, g_rc = generate_map(
+                        mtype, size=size, num_agents=n, seed=seed
+                    )
+                except RuntimeError:
+                    failed.append(tag)   # 배치 실패 → 기록만 하고 다음 조합으로
+                    seed += 1
+                    continue
+
+                map_file = f"{out_dir}/map_{tag}.npy"
+                save_grid(grid, map_file)
+                scen = to_scenario(grid, s_rc, g_rc,
+                                   scenario_id=f"scen_{tag}",
+                                   map_id=tag, map_file=map_file)
+                save_scenario(scen, f"{out_dir}/scenario_{tag}.json")
+                results[tag] = (grid, s_rc, g_rc, scen)
+                seed += 1
+
+    if failed:
+        print(f"\n⚠ 생성 실패 (공간 부족): {len(failed)}개 → {failed}")
     return results
 
+def build_dev_set(base_seed=0, out_dir="scenarios_dev"):
+    """개발/디버깅용 — 유형별 대표 1개씩, 총 5개만."""
+    return build_dataset(sizes=[11], agent_counts=[3],
+                          base_seed=base_seed, out_dir=out_dir)
 
 if __name__ == "__main__":
-    # 5종 전부 생성 + 저장
-    data = build_dataset(size=11, num_agents=3, base_seed=0)
-    for mtype, (grid, s_rc, g_rc, scen) in data.items():
-        print(f"[{mtype:6s}] 벽 {int(grid.sum()):3d}칸 | agents:")
-        for a in scen["agents"]:
-            print(f"     agent{a['agent_id']}: start(x,y)={a['start']}  goal(x,y)={a['goal']}")
-    print("\n저장 완료: ./scenarios/ 폴더에 map_*.npy 와 scenario_*.json")
+    # 1) 지금은 개발 단계 → 5개만 생성 (45개는 나중에 build_full_dataset()으로)
+    data = build_dev_set()
+
+    print(f"총 {len(data)}개 시나리오 생성 완료")
+    for tag, (grid, s_rc, g_rc, scen) in data.items():
+        print(f"[{tag:20s}] 벽 {int(grid.sum()):3d}칸 | agents: {len(scen['agents'])}")
+    print("\n저장 완료: ./scenarios_dev/ 폴더")
+
+    # 2) 시각화 — 딕셔너리의 실제 키를 그대로 사용 (오타 방지)
+    example_tag = "maze_s11_n3"   # 벽이 있는 맵으로 바꿔서 검증
+    if example_tag not in data:
+        example_tag = next(iter(data))  # 혹시 이름이 다르면 안전하게 대체
+    grid, s_rc, g_rc, scen = data[example_tag]
+    visualize(grid, s_rc, g_rc, title=example_tag,
+          save_path=f"scenarios_dev/preview_{example_tag}.png")
