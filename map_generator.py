@@ -20,6 +20,10 @@ import matplotlib
 import matplotlib.pyplot as plt
 from collections import deque
 
+def rc_to_xy(rc):
+    """내부 (row, col)  ->  CBS 표준 [x, y] = [col, row]."""
+    r, c = rc
+    return [int(c), int(r)]
 
 # ===============================================================
 # 1. 공통 부품 (모든 맵 유형이 공유)
