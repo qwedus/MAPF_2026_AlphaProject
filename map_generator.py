@@ -191,59 +191,83 @@ def visualize(grid_map, starts_rc, goals_rc, title="", save_path=None):
 # ===============================================================
 # 6. 5종 한 번에 만들고 저장하는 헬퍼
 # ===============================================================
-def build_dataset(sizes=[8, 11, 15], agent_counts=[2, 3, 5],
+# ===============================================================
+# 6. 랜덤 크기·에이전트 수로 데이터셋 생성
+# ===============================================================
+def build_dataset(size_range=(8, 16), agent_range=(2, 6),
+                   num_samples_per_type=5,
                    base_seed=0, out_dir="scenarios"):
-    """맵 유형 × 크기 × 에이전트 수 전 조합을 생성."""
+    """맵 유형별로, 크기와 에이전트 수를 무작위 범위 내에서 뽑아 여러 샘플 생성.
+
+    size_range=(a, b)  -> a 이상 b 미만 정수 중 무작위 (예: (8,16) → 8~15)
+    agent_range=(a, b) -> a 이상 b 미만 정수 중 무작위 (예: (2,6) → 2~5)
+    """
     import os
     os.makedirs(out_dir, exist_ok=True)
     results = {}
     failed = []
+    rng_master = np.random.default_rng(base_seed)  # 크기/에이전트수 뽑기 전용 rng
     seed = base_seed
 
     for mtype in MAP_TYPES:
-        for size in sizes:
-            for n in agent_counts:
-                tag = f"{mtype}_s{size}_n{n}"
-                try:
-                    grid, s_rc, g_rc = generate_map(
-                        mtype, size=size, num_agents=n, seed=seed
-                    )
-                except RuntimeError:
-                    failed.append(tag)   # 배치 실패 → 기록만 하고 다음 조합으로
-                    seed += 1
-                    continue
+        for sample_idx in range(num_samples_per_type):
+            size = int(rng_master.integers(size_range[0], size_range[1]))
+            n = int(rng_master.integers(agent_range[0], agent_range[1]))
+            tag = f"{mtype}_s{size}_n{n}_{sample_idx}"
 
-                map_file = f"{out_dir}/map_{tag}.npy"
-                save_grid(grid, map_file)
-                scen = to_scenario(grid, s_rc, g_rc,
-                                   scenario_id=f"scen_{tag}",
-                                   map_id=tag, map_file=map_file)
-                save_scenario(scen, f"{out_dir}/scenario_{tag}.json")
-                results[tag] = (grid, s_rc, g_rc, scen)
+            try:
+                grid, s_rc, g_rc = generate_map(
+                    mtype, size=size, num_agents=n, seed=seed
+                )
+            except RuntimeError:
+                failed.append(tag)
                 seed += 1
+                continue
+
+            map_file = f"{out_dir}/map_{tag}.npy"
+            save_grid(grid, map_file)
+            scen = to_scenario(grid, s_rc, g_rc,
+                               scenario_id=f"scen_{tag}",
+                               map_id=tag, map_file=map_file)
+            save_scenario(scen, f"{out_dir}/scenario_{tag}.json")
+            results[tag] = (grid, s_rc, g_rc, scen)
+            seed += 1
 
     if failed:
         print(f"\n⚠ 생성 실패 (공간 부족): {len(failed)}개 → {failed}")
     return results
 
+
 def build_dev_set(base_seed=0, out_dir="scenarios_dev"):
-    """개발/디버깅용 — 유형별 대표 1개씩, 총 5개만."""
-    return build_dataset(sizes=[11], agent_counts=[3],
+    """개발/디버깅용 — 유형별 1개씩, 크기도 무작위(빠른 확인용)."""
+    return build_dataset(size_range=(8, 16), agent_range=(2, 6),
+                          num_samples_per_type=1,
                           base_seed=base_seed, out_dir=out_dir)
 
+
+def build_full_dataset(size_range=(8, 20), agent_range=(2, 8),
+                        num_samples_per_type=30,
+                        base_seed=0, out_dir="scenarios_full"):
+    """실제 배포용 — 유형별로 여러 개, 크기/에이전트 수 폭넓게 무작위."""
+    return build_dataset(size_range=size_range, agent_range=agent_range,
+                          num_samples_per_type=num_samples_per_type,
+                          base_seed=base_seed, out_dir=out_dir)
+
+
 if __name__ == "__main__":
-    # 1) 지금은 개발 단계 → 5개만 생성 (45개는 나중에 build_full_dataset()으로)
+    # 지금은 개발 단계 → 5개만 생성 (크기도 무작위)
     data = build_dev_set()
 
     print(f"총 {len(data)}개 시나리오 생성 완료")
     for tag, (grid, s_rc, g_rc, scen) in data.items():
-        print(f"[{tag:20s}] 벽 {int(grid.sum()):3d}칸 | agents: {len(scen['agents'])}")
+        print(f"[{tag:22s}] 벽 {int(grid.sum()):3d}칸 | agents: {len(scen['agents'])}")
     print("\n저장 완료: ./scenarios_dev/ 폴더")
 
-    # 2) 시각화 — 딕셔너리의 실제 키를 그대로 사용 (오타 방지)
-    example_tag = "maze_s11_n3"   # 벽이 있는 맵으로 바꿔서 검증
-    if example_tag not in data:
-        example_tag = next(iter(data))  # 혹시 이름이 다르면 안전하게 대체
+    # 시각화 — maze로 시작하는 키를 찾아서 확인 (태그가 매번 달라지므로)
+    example_tag = next(
+        (k for k in data if k.startswith("maze_")), next(iter(data))
+    )
     grid, s_rc, g_rc, scen = data[example_tag]
     visualize(grid, s_rc, g_rc, title=example_tag,
-          save_path=f"scenarios_dev/preview_{example_tag}.png")
+              save_path=f"scenarios_dev/preview_{example_tag}.png")
+    print(f"미리보기 이미지 저장 완료: scenarios_dev/preview_{example_tag}.png")

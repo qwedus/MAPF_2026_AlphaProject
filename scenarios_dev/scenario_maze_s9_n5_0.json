@@ -1,0 +1,62 @@
+{
+  "scenario_id": "scen_maze_s9_n5_0",
+  "map_id": "maze_s9_n5_0",
+  "map_file": "scenarios_dev/map_maze_s9_n5_0.npy",
+  "agents": [
+    {
+      "agent_id": 0,
+      "start": [
+        1,
+        8
+      ],
+      "goal": [
+        8,
+        6
+      ]
+    },
+    {
+      "agent_id": 1,
+      "start": [
+        4,
+        2
+      ],
+      "goal": [
+        2,
+        0
+      ]
+    },
+    {
+      "agent_id": 2,
+      "start": [
+        0,
+        2
+      ],
+      "goal": [
+        6,
+        5
+      ]
+    },
+    {
+      "agent_id": 3,
+      "start": [
+        8,
+        1
+      ],
+      "goal": [
+        0,
+        5
+      ]
+    },
+    {
+      "agent_id": 4,
+      "start": [
+        0,
+        3
+      ],
+      "goal": [
+        5,
+        8
+      ]
+    }
+  ]
+}
