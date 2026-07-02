@@ -6,20 +6,26 @@
   각 모듈은 "자기가 접촉하는 외부 포맷"과의 변환을 자기 파일 안에서만 처리한다.
 
     - map_generator.py : 내부 (row,col) 그대로 사용. JSON으로 내보낼 때만 rc_to_xy()로 변환.
-    - cbs_adapter.py    : 공개 함수(plan)는 (row,col) in/out. atb033 subprocess와 통신할 때만
+    - src/cbs_adapter.py : 공개 함수(plan)는 (row,col) in/out. atb033 subprocess와 통신할 때만
                           internal_to_atb033 / atb033_to_internal로 변환.
     - simulator.py      : 공개 함수(validate_and_parse_paths)는 (row,col) in.
                           (수정 전에는 여기만 {'x','y'} 딕셔너리를 요구해서 메인에서
                            별도 변환 래퍼가 필요했음 -> simulator.py 자체를 고쳐서 제거함)
 
   따라서 main.py에는 좌표 변환 코드가 전혀 없다. 순수하게 파이프라인 순서만 담당한다.
+
+[ 참고 ]
+  cbs_adapter는 feature/cbs-adapter 브랜치에서 src/ 패키지 구조(tests/, scripts/,
+  third_party/ 서브모듈 포함)로 발전했기 때문에, cbs_adapter.py 파일만 루트로 끌어내지 않고
+  main.py 쪽에서 src.cbs_adapter로 import하도록 맞춤. map_generator/simulator는 기존대로
+  루트에 위치.
 """
 
 import argparse
 
-from map_generator import generate_map, MAP_TYPES   # 역할 A
-from cbs_adapter import CBSAdapter, CBSAdapterConfig  # 역할 C (오픈소스 어댑터)
-from simulator import Simulator                        # 역할 B
+from map_generator import generate_map, MAP_TYPES        # 역할 A
+from src.cbs_adapter import CBSAdapter, CBSAdapterConfig  # 역할 C (오픈소스 어댑터, src/ 패키지 구조 유지)
+from simulator import Simulator                            # 역할 B
 
 
 def run_pipeline(map_type: str, size: int, num_agents: int, seed: int, solver_root: str | None):
