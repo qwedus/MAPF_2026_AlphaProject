@@ -142,8 +142,8 @@ def to_scenario(grid_map, starts_rc, goals_rc, scenario_id, map_id, map_file):
     for aid, (s, g) in enumerate(zip(starts_rc, goals_rc)):
         agents.append({
             "agent_id": aid,
-            "start": [int(s[0]), int(s[1])],   # (row, col)
-            "goal":  [int(g[0]), int(g[1])],   # (row, col)
+            "start": rc_to_xy(s),   # [x, y] = [col, row]
+            "goal":  rc_to_xy(g),   # [x, y] = [col, row]
         })
     return {
         "scenario_id": scenario_id,
