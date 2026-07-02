@@ -10,14 +10,14 @@ class Simulator:
     """
 
     def __init__(self):
-        # 행동 정의 약속 (0: 대기, 1: 상, 2: 하, 3: 좌, 4: 우)
-        # (drow, dcol) 기준으로 재정의: 상=row 감소, 하=row 증가, 좌=col 감소, 우=col 증가
+        # 행동 정의 약속 (IL spec.py v0.2 표준과 통일: 0=상, 1=하, 2=좌, 3=우, 4=대기)
+        # (drow, dcol) 기준: 상=row 감소, 하=row 증가, 좌=col 감소, 우=col 증가
         self.actions = {
-            0: (0, 0),    # Wait
-            1: (-1, 0),   # Up    : row -1
-            2: (1, 0),    # Down  : row +1
-            3: (0, -1),   # Left  : col -1
-            4: (0, 1),    # Right : col +1
+            0: (-1, 0),   # Up    : row -1
+            1: (1, 0),    # Down  : row +1
+            2: (0, -1),   # Left  : col -1
+            3: (0, 1),    # Right : col +1
+            4: (0, 0),    # Wait
         }
 
     @staticmethod
@@ -57,8 +57,8 @@ class Simulator:
         max_t = max(len(paths[aid]) for aid in agent_ids)
         max_time_step = max_t - 1
 
-        # 모방학습용 정수형 행동 배열 초기화 (Shape: 시간, 로봇수) -> 초기값 0(대기)
-        action_array = np.zeros((max_time_step, num_agents), dtype=np.int64)
+        # 모방학습용 정수형 행동 배열 초기화 (Shape: 시간, 로봇수) -> 초기값 4(대기)
+        action_array = np.full((max_time_step, num_agents), 4, dtype=np.int64)
 
         # 시간축(t)을 돌면서 검증 및 액션 추출
         for t in range(max_t):
@@ -92,11 +92,11 @@ class Simulator:
                     drow = next_row - curr_row
                     dcol = next_col - curr_col
 
-                    action = 0
-                    if drow == -1 and dcol == 0:  action = 1  # 상
-                    elif drow == 1 and dcol == 0: action = 2  # 하
-                    elif drow == 0 and dcol == -1: action = 3  # 좌
-                    elif drow == 0 and dcol == 1:  action = 4  # 우
+                    action = 4  # 대기 (기본값)
+                    if drow == -1 and dcol == 0:  action = 0  # 상
+                    elif drow == 1 and dcol == 0: action = 1  # 하
+                    elif drow == 0 and dcol == -1: action = 2  # 좌
+                    elif drow == 0 and dcol == 1:  action = 3  # 우
 
                     action_array[t, idx] = action
 
