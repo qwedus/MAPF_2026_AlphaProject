@@ -116,6 +116,34 @@ Track 2 (Imitation Learning) v0.3 기준. BC 학습·평가, 에폭 분석, CBS 
 
   → 데이터 7.4배 + 방향 액션 균형화로 **모든 액션 개선**. 특히 우/상 혼동 크게 완화, 좌는 여전히 최약점.
 
+### 2-9. 시뮬레이터 도착 & DAgger 검증
+- 시뮬레이터 팀이 `origin/feature/simulator`(커밋 `8c4ac1a`)에 **`MAPFStepSimulator(MAPFSimulator)`**를
+  구현해 올림 — 우리가 요청했던 `reset`/`step`/`get_expert_actions` ABC. v0.3 채널·goal_dir·충돌처리
+  (벽/맵밖=제자리, vertex/edge collision=제자리) 모두 규격대로.
+- 로컬 스모크 검증 통과: obs 포맷 `(3,5,5)+(2,)`, 전문가 롤아웃 전원 목표 도달, **DAgger collect+train 1-iter 정상**.
+- → **DAgger 및 정책 롤아웃(성공률) 평가가 열림.**
+
+### 2-10. 표준 MAPF 벤치마크 평가 (MovingAI)
+- 기존 평가셋(`real_v03`)이 자체 합성맵이라, **MovingAI(Sturtevant) 표준 벤치마크**로 추가 평가.
+- 전체 맵 33개 + 시나리오 묶음 다운로드, `.map`/`.scen` 파서 작성(`scripts/eval_movingai_benchmark.py`).
+- 두 지표: ① CBS-최적경로 위 **action-accuracy**, ② 정책 롤아웃 **success-rate**(전원 목표·무충돌, 논문 지표).
+
+  | 맵 | 에이전트 | action-acc | success-rate |
+  |---|---|---|---|
+  | empty-8-8 | 2 | 0.827 | **0.950** |
+  | empty-8-8 | 4 | 0.871 | 0.550 |
+  | empty-8-8 | 6 | 0.879 | 0.450 |
+  | empty-8-8 | 8 | 0.876 | **0.250** |
+  | random-32-32-10 | 2 | 0.791 | 0.700 |
+  | random-32-32-10 | 4 | 0.818 | 0.300 |
+
+- **핵심 관찰**: per-step action-acc는 ~0.8~0.88로 높은데, **에이전트 수가 늘면 success-rate가 급락**
+  (empty-8-8: 0.95→0.25). BC의 전형적 한계 — 매 스텝 소오차가 롤아웃에서 누적돼 충돌/교착 발생.
+  **DAgger가 필요한 이유를 표준 벤치마크로 입증.** 미학습 대형 맵(32×32)에도 action-acc가 유지돼
+  per-step 일반화는 양호.
+
+![benchmark](img/fig_benchmark.png)
+
 ---
 
 ## 3. 발생한 오류와 해결 (트러블슈팅)
@@ -128,6 +156,7 @@ Track 2 (Imitation Learning) v0.3 기준. BC 학습·평가, 에폭 분석, CBS 
 | D | 마크다운 문서가 GitHub에서 **일반 텍스트로** 표시됨 | push된 파일명 `simulater 수정사항`에 **`.md` 확장자 없음** (커밋 `c286608`) | 파일명에 `.md`를 붙임. GitHub은 `.md`/`.markdown`만 렌더링 |
 | E | v0.2 산출물을 그대로 쓰면 학습이 "성공"하는데 결과가 이상할 위험 | v0.3에서 grid 채널 **의미**만 바뀌고 shape은 동일 → 에러 없이 로드되나 의미가 틀림 | 기존 `.npz`/`.pt` 전부 삭제 후 v0.3로 재생성 (조용한 오염 방지) |
 | F | `full_sweep` 45개 중 7개 CBS 실패 | maze/n5/대형 맵에서 CBS 탐색이 타임아웃 | timeout 45→90 상향으로 일부 시도했으나 maze·대형-n5는 구조적으로 미해결 → 다양화 시 해당 조합 최소화로 우회 |
+| G | MovingAI `.map` 직접 URL이 raw 대신 HTML 메뉴 반환, per-map 시나리오 zip은 404 | movingai.com은 파일을 묶음 zip으로 배포 | 전체 맵 `mapf-map.zip`, 시나리오 `mapf-scen-random.zip`를 받아 풀어서 사용 |
 
 ---
 
@@ -176,17 +205,17 @@ Track 2 (Imitation Learning) v0.3 기준. BC 학습·평가, 에폭 분석, CBS 
 
 ---
 
-## 4-2. ⚠ 평가 데이터셋에 대한 주의 (미해결 이슈)
+## 4-2. 평가 데이터셋 정리 (자체셋 + 표준 벤치마크)
 
-**현재 평가셋(`real_v03`, N=303)은 우리가 자체 생성한 6개 맵(il_smoke)이며, MAPF 커뮤니티 표준
-벤치마크가 아니다.** held-out(학습셋과 disjoint)이라 일반화 측정으로는 유효하지만, 논문/보고서에서
-통용되는 **MovingAI(Sturtevant) MAPF 벤치마크**(`empty-8-8`, `random-32-32-10/20`,
-`room-32-32-4`, `maze-32-32-2`, `warehouse-*`, `den312d` 등, `.map`+`.scen` 포맷)로 평가하면 신뢰도가 높다.
+두 종류로 평가한다:
+- **`real_v03`(N=303)** — 자체 합성 6맵. 학습셋과 disjoint라 **일반화(held-out) 측정용**. 표준은 아님.
+- **MovingAI(Sturtevant) 표준 벤치마크** — 논문 통용 세트(`empty-8-8`, `random-32-32-10`, …). §2-10에서
+  action-accuracy + success-rate로 평가 완료. **표준셋 성공률 지표는 시뮬레이터(§2-9)로 롤아웃해 산출**.
 
-도입 시 고려사항:
-- `.map`/`.scen` 파서 필요(현재 우리는 `.npy` grid + 자체 JSON scenario 사용).
-- **표준 벤치마크는 크고(32×32~256×256) 에이전트가 많아, 현재 CBS 어댑터(atb033)로는 대부분 타임아웃**
-  → 소형 맵(`empty-8-8`, `random-32-32-10`)·소수 에이전트로 시작하는 게 현실적.
+남은 고려사항:
+- 표준 벤치마크는 크고(최대 256×256) 에이전트가 많아, 현재 CBS 어댑터(atb033)로는 라벨 생성이
+  대부분 타임아웃 → action-acc는 소형 맵/소수 에이전트에서만. **success-rate는 CBS 라벨이 불필요**하여
+  더 큰 맵에도 확장 가능(정책 롤아웃만 하면 됨).
 - 정식 MAPF 지표(성공률/makespan/flowtime)는 **정책을 스텝 롤아웃**해야 하므로 `MAPFSimulator`(DAgger용) 필요.
   action-accuracy만이면 CBS 라벨만으로 가능.
 
@@ -209,7 +238,11 @@ Track 2 (Imitation Learning) v0.3 기준. BC 학습·평가, 에폭 분석, CBS 
 
 - [x] diverse 배치 병합 → combined 13,696 샘플
 - [x] 확장 데이터로 CNN 재학습 → held-out 0.772→0.825 (모든 액션 개선 확인)
-- [ ] **MovingAI 표준 MAPF 벤치마크로 평가**(§4-2) — `.map`/`.scen` 파서 + 소형 맵부터
+- [x] 시뮬레이터(`MAPFStepSimulator`) 도착·검증, DAgger 루프 동작 확인 (§2-9)
+- [x] MovingAI 표준 벤치마크 평가 (`empty-8-8`, `random-32-32-10`; action-acc + success-rate) (§2-10)
+- [ ] **DAgger 학습 실행** — 이제 시뮬레이터가 있으니, BC-사전학습 CNN에서 DAgger로 success-rate 개선 측정
+      (특히 다중 에이전트에서 롤아웃 오차 누적 완화 기대)
+- [ ] 표준 벤치마크 success-rate를 더 큰 맵/에이전트로 확장(정책 롤아웃은 CBS 불필요)
 - [ ] 좌(Left) F1 최약점(0.656) 추가 개선 — 좌 방향 편향 시나리오 보강 검토
 - [ ] `train.py` best-val 체크포인트 저장 로직 추가
 - [ ] DAgger: 시뮬레이터 팀에 `MAPFSimulator` ABC 구현 요청([simulator_abc_request.md](simulator_abc_request.md)) → 받는 즉시 연동
