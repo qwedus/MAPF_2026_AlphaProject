@@ -1,0 +1,220 @@
+# IL 파이프라인 작업 로그 — 2026-07-06
+
+Track 2 (Imitation Learning) v0.3 기준. BC 학습·평가, 에폭 분석, CBS 데이터 재생성/다양화 과정 및
+그 과정에서 발생한 오류와 해결을 정리한다. (보고서 초안용 원자료)
+
+> 표준 v0.3 요약은 [HANDOFF.md](../HANDOFF.md), 채널 재설계 배경은
+> [channel_spec_v0.3_notes.md](../channel_spec_v0.3_notes.md), DAgger 시뮬레이터 요청은
+> [simulator_abc_request.md](simulator_abc_request.md) 참고.
+
+---
+
+## 0. 이 세션의 목표
+
+1. 원격(GitHub) 최신 변경을 로컬로 반영
+2. v0.3 채널 재설계에 맞춰 산출물 재생성 후 BC(MLP/CNN) 학습·평가
+3. 성능 분석 + 에폭·데이터 규모/다양성이 성능에 주는 영향 파악
+4. 실데이터를 직접 새로 생성(맵→CBS→데이터셋)하고 데이터 다양화
+
+---
+
+## 1. 실행 환경
+
+| 항목 | 값 | 비고 |
+|---|---|---|
+| OS | Windows 11 | 기본 셸 PowerShell |
+| Python | 3.12.6 | **`py` 런처로 실행** (아래 오류 A 참고) |
+| PyTorch | 2.6.0+cu124 | CUDA 사용 가능 |
+| numpy | 2.2.6 | |
+| PyYAML | 6.0.3 | CBS 어댑터가 사용 |
+| GPU | 8GB급 (CUDA) | 학습 시에만 사용. CBS 배치는 **CPU 전용** |
+
+**자원 사용 구분 (중요):**
+- **CBS 배치(데이터 생성)** = CPU 탐색 알고리즘. GPU 미사용. 실제 병목은 여기.
+- **MLP/CNN 학습·평가** = GPU(CUDA). 모델이 작아(3만~5만 params) 몇 초 내 완료.
+
+---
+
+## 2. 진행 과정 (시간순)
+
+### 2-1. GitHub 동기화
+- 로컬 `IL` 브랜치 == `origin/IL` (0 ahead / 0 behind) — IL 자체는 새로 받을 커밋 없음.
+- 원격에서 갱신된 브랜치: `main`, `feature/map-generator`, `test-cbs-adapter-map-generator`.
+- Track 1 파일(`src/*`)은 HANDOFF 정책상 IL 브랜치에 커밋하지 않고 로컬 실행용으로만 둠(untracked).
+- 원격과 실제로 내용이 다른 유일 파일: **`src/cbs_adapter.py`** — CBS 타임아웃 기본값 **30s → 90s**
+  (`DEFAULT_CBS_TIMEOUT_SEC = 90` 상수 도입). 최신 버전을 로컬로 가져옴.
+- 나머지 `src/*`는 v0.3 채널이 이미 반영됨(로컬==원격, 줄바꿈 차이뿐).
+
+### 2-2. v0.3 산출물 재생성
+- v0.3에서 grid 채널 **의미**가 바뀜(shape은 그대로 `(N,3,5,5)`). 기존 v0.2 산출물은
+  shape이 같아 에러 없이 로드되지만 **조용히 틀린 데이터로 학습**되는 위험 → 반드시 재생성.
+- 기존 `dummy_v02.npz`, `mlp.pt`, `cnn.pt` 삭제 후 `py spec.py`로 v0.3 더미(N=2000) 재생성 + 검증 통과.
+
+### 2-3. BC 학습 — 더미(파이프라인 무결성 확인용)
+| 모델 | val acc | eval acc | 대기(4) F1 |
+|---|---|---|---|
+| MLP | 0.772 | 0.877 | **0.000** |
+| CNN | 0.860 | 0.877 | **0.000** |
+
+- 대기 F1=0.000은 **더미 라벨 생성기 편향**(대기를 노이즈로만 넣음) 때문. 실데이터에선 정상(아래).
+
+### 2-4. 실데이터 확인
+| 파일 | = 출처 | N | action 분포(상하좌우대기) |
+|---|---|---|---|
+| `real_v03.npz` | `il_smoke_v0_3` | 303 | [48, 56, 34, 75, 90] |
+| `real_v03_full.npz` | `full_sweep` | 1632 | [273, 244, 283, 254, 578] |
+
+- 두 세트의 `scenario_id`가 **완전 disjoint**(303=기본 6맵 / 1632=45조합) → 1632로 학습, 303으로
+  평가하면 **진짜 일반화(held-out) 성능** 측정 가능.
+- `full_sweep`은 45조합 중 **38 성공 / 7 실패**(모두 CBS 타임아웃, 그중 6개가 maze).
+
+### 2-5. 실데이터 BC 학습·평가
+학습=`real_v03_full`(1632), held-out 평가=`real_v03`(303).
+
+| 모델 | 20에폭 val | held-out acc | held-out macro-F1 | 대기 F1 |
+|---|---|---|---|---|
+| MLP | 0.752 | 0.703 | 0.683 | 0.836 |
+| CNN | 0.770 | **0.762** | **0.733** | **0.951** |
+
+- 실데이터에선 대기 F1 정상화(더미 편향 가설 확인). CNN이 전 지표 우세.
+
+### 2-6. 에폭 분석 (60에폭으로 확장)
+| 모델 | 내부 val 추이 | held-out 20ep → 60ep |
+|---|---|---|
+| MLP | ep10~15 포화 후 val loss만 상승(과적합) | 0.703 → **0.607 (악화)** |
+| CNN | ep55까지 val loss 계속 하락, val acc 0.837 | 0.762 → **0.772 (개선)** |
+
+- **MLP: 12~15에폭 + early stopping 권장** (더 늘리면 손해).
+- **CNN: 50~55에폭 권장** (아직 완만히 상승 중 → 데이터 늘면 더 길게 가능).
+- 개선점: `train.py`가 현재 **마지막 에폭만 저장** → best-val 체크포인트 저장 로직 추가 시 MLP 과적합 자동 회피.
+
+### 2-7. CBS 실패/타임아웃 분석
+- `full_sweep`의 7개 실패 = **전부 CBS 타임아웃(45s)**, 6개가 `maze`, 나머지 `dense_s15_n5`, `rooms_s11_n5`.
+- 실패는 **n5(에이전트 5)·maze·대형 맵**에 집중.
+- 검증 실험: 동일 45개를 **timeout 90s**로 재실행 → `dense_s15_n5`는 **90초로도 실패**.
+  → **타임아웃 증가만으로 maze/대형-n5는 회수 안 됨(구조적 한계)**.
+
+### 2-8. 데이터 다양화 (이번 핵심)
+- 문제의식: 현재 CNN 약점이 **좌/우 방향 혼동**(좌 F1 0.63, 우 0.70) → 레이아웃 다양성 부족으로 추정.
+- 기존 `map_generator.build_dataset`은 (지형×크기×에이전트) 조합당 **seed 1개**만 생성(45개).
+- 신규 스크립트 **`scripts/build_diverse_scenarios.py`** 작성: 조합당 seed 여러 개를 뽑아 배치/벽배열
+  다변화. 예산은 CBS 난이도에 맞춰 배분(잘 풀리는 조합에 집중).
+- 결과: **332개 시나리오 생성**(empty/sparse 각 90, dense/rooms 각 70, maze 12).
+- CBS 배치(timeout 30) 완료: **316 성공 / 16 실패**(성공률 95%). maze를 쉬운 조합으로 제한해 maze 실패 1개뿐.
+- 병합 결과: diverse **12,064 샘플**. 기존 `real_v03_full`(1,632)과 합쳐 **`real_v03_combined.npz` = 13,696 샘플**
+  (held-out `real_v03`과 겹침 없음 확인).
+- **확장 효과 (CNN, held-out `real_v03`)**:
+
+  | 지표 | baseline 1,632 | combined 13,696 |
+  |---|---|---|
+  | accuracy | 0.772 | **0.825** (+0.053) |
+  | macro-F1 | 0.738 | **0.789** |
+  | 상 F1 | 0.640 | 0.739 |
+  | 우 F1 | 0.696 | 0.810 |
+  | 좌 F1 | 0.632 | 0.656 |
+  | 대기 F1 | 0.978 | 0.983 |
+
+  → 데이터 7.4배 + 방향 액션 균형화로 **모든 액션 개선**. 특히 우/상 혼동 크게 완화, 좌는 여전히 최약점.
+
+---
+
+## 3. 발생한 오류와 해결 (트러블슈팅)
+
+| # | 증상 | 원인 | 해결 |
+|---|---|---|---|
+| A | `python --version` 실행 시 "Python"만 출력 후 exit code 49, torch import 무반응 | `python`이 **Microsoft Store 스텁**(`WindowsApps\python.exe`)을 가리킴 — 실제 인터프리터 아님 | **`py` 런처 사용**(Python 3.12.6). 이후 모든 실행을 `py ...`로 통일 |
+| B | 콘솔에 한글 출력이 `????`/모지바케로 깨짐 (예: spec.py, train.py 로그) | Windows 콘솔 기본 코드페이지가 UTF-8이 아님 | 실행 전 `$env:PYTHONIOENCODING="utf-8"` 설정. (프로그램 동작 자체는 정상이었고 출력 표시만 문제) |
+| C | `git diff --stat origin/... -- src/`가 모든 파일을 "삭제"로 표시 | `src/*`가 **untracked**라 git이 인덱스 기준 비교 불가 | 오해였음. 파일 내용을 `git show <ref>:path`와 직접 diff해 확인 → 실제로는 줄바꿈(CRLF) 차이뿐 |
+| D | 마크다운 문서가 GitHub에서 **일반 텍스트로** 표시됨 | push된 파일명 `simulater 수정사항`에 **`.md` 확장자 없음** (커밋 `c286608`) | 파일명에 `.md`를 붙임. GitHub은 `.md`/`.markdown`만 렌더링 |
+| E | v0.2 산출물을 그대로 쓰면 학습이 "성공"하는데 결과가 이상할 위험 | v0.3에서 grid 채널 **의미**만 바뀌고 shape은 동일 → 에러 없이 로드되나 의미가 틀림 | 기존 `.npz`/`.pt` 전부 삭제 후 v0.3로 재생성 (조용한 오염 방지) |
+| F | `full_sweep` 45개 중 7개 CBS 실패 | maze/n5/대형 맵에서 CBS 탐색이 타임아웃 | timeout 45→90 상향으로 일부 시도했으나 maze·대형-n5는 구조적으로 미해결 → 다양화 시 해당 조합 최소화로 우회 |
+
+---
+
+## 4. 핵심 수치 요약
+
+**held-out(`real_v03`, N=303) = 진짜 일반화 성능**
+
+| 실험 | 모델 | held-out acc | macro-F1 | 대기 F1 | 비고 |
+|---|---|---|---|---|---|
+| 실데이터 20ep | MLP | 0.703 | 0.683 | 0.836 | |
+| 실데이터 20ep | CNN | 0.762 | 0.733 | 0.951 | |
+| 실데이터 60ep | MLP | 0.607 | 0.599 | 0.653 | 과적합으로 악화 |
+| 실데이터 60ep | CNN | 0.772 | 0.738 | 0.978 | 소폭 개선 |
+| **다양화(combined 13,696)** | **CNN** | **0.825** | **0.789** | **0.983** | 데이터 7.4배 → 최고 성능 |
+
+**데이터셋 규모**
+| 데이터셋 | 시나리오 | 성공 | 샘플 수 |
+|---|---|---|---|
+| il_smoke_v0_3 (real_v03, held-out) | 6 | 6 | 303 |
+| full_sweep (real_v03_full, baseline) | 45 | 38 | 1,632 |
+| diverse (신규) | 332 | 316 | 12,064 |
+| **combined (baseline+diverse, 최종 학습셋)** | — | — | **13,696** |
+
+---
+
+## 4-1. 그래프
+
+생성 스크립트: `scripts/plot_report_figures.py` (학습 셋업은 `train.py`와 동일 재현).
+
+**에폭별 학습 곡선 (MLP vs CNN, baseline 1,632)**
+![epoch curves](img/fig_epoch_curves.png)
+> MLP는 train acc가 0.99까지 오르지만 val은 ~0.75에서 정체하고 val loss가 ep15 이후 다시 상승(과적합).
+> CNN은 train·val 모두 꾸준히 상승, val loss도 계속 하락.
+
+**held-out confusion matrix (baseline 학습 모델, real_v03)**
+![confusion](img/fig_confusion_heldout.png)
+> 대기(Wait)는 거의 완벽. 오분류는 주로 좌/우·상/우 방향 혼동에 몰림.
+
+**데이터셋 규모·액션 분포**
+![dataset stats](img/fig_dataset_stats.png)
+> diverse 확장으로 방향 액션(상하좌우)이 균형화됨.
+
+**데이터 확장 효과 (CNN held-out acc)**
+![expansion](img/fig_data_expansion.png)
+> baseline 1,632 → combined 13,696에서 held-out 0.772 → 0.825.
+
+---
+
+## 4-2. ⚠ 평가 데이터셋에 대한 주의 (미해결 이슈)
+
+**현재 평가셋(`real_v03`, N=303)은 우리가 자체 생성한 6개 맵(il_smoke)이며, MAPF 커뮤니티 표준
+벤치마크가 아니다.** held-out(학습셋과 disjoint)이라 일반화 측정으로는 유효하지만, 논문/보고서에서
+통용되는 **MovingAI(Sturtevant) MAPF 벤치마크**(`empty-8-8`, `random-32-32-10/20`,
+`room-32-32-4`, `maze-32-32-2`, `warehouse-*`, `den312d` 등, `.map`+`.scen` 포맷)로 평가하면 신뢰도가 높다.
+
+도입 시 고려사항:
+- `.map`/`.scen` 파서 필요(현재 우리는 `.npy` grid + 자체 JSON scenario 사용).
+- **표준 벤치마크는 크고(32×32~256×256) 에이전트가 많아, 현재 CBS 어댑터(atb033)로는 대부분 타임아웃**
+  → 소형 맵(`empty-8-8`, `random-32-32-10`)·소수 에이전트로 시작하는 게 현실적.
+- 정식 MAPF 지표(성공률/makespan/flowtime)는 **정책을 스텝 롤아웃**해야 하므로 `MAPFSimulator`(DAgger용) 필요.
+  action-accuracy만이면 CBS 라벨만으로 가능.
+
+→ TODO(§6)에 반영.
+
+---
+
+## 5. 결론 및 권장사항
+
+1. **주력 모델 = CNN.** 전 구간에서 MLP 우세, 에폭 확장 수혜도 CNN만 받음(MLP는 flatten이라 과적합).
+2. **에폭**: MLP 12~15 + early stop / CNN 50~55. `train.py`에 best-val 저장 로직 추가 권장.
+3. **약점**: 좌/우 방향 혼동 → **데이터 양·다양성**으로 개선 시도(진행 중).
+4. **타임아웃**: 45→90 상향은 일부만 도움. maze·대형-n5는 구조적이라, 데이터 확장은 **잘 풀리는 조합에
+   seed를 많이 주는 방식**이 비용 대비 효율적.
+5. **에이전트 수**: n5는 CBS 실패율↑ → n2/n3 위주로 물량, n5는 empty/sparse 소량만.
+
+---
+
+## 6. 다음 할 일 (TODO)
+
+- [x] diverse 배치 병합 → combined 13,696 샘플
+- [x] 확장 데이터로 CNN 재학습 → held-out 0.772→0.825 (모든 액션 개선 확인)
+- [ ] **MovingAI 표준 MAPF 벤치마크로 평가**(§4-2) — `.map`/`.scen` 파서 + 소형 맵부터
+- [ ] 좌(Left) F1 최약점(0.656) 추가 개선 — 좌 방향 편향 시나리오 보강 검토
+- [ ] `train.py` best-val 체크포인트 저장 로직 추가
+- [ ] DAgger: 시뮬레이터 팀에 `MAPFSimulator` ABC 구현 요청([simulator_abc_request.md](simulator_abc_request.md)) → 받는 즉시 연동
+- [ ] (선택) maze 전용 긴 타임아웃 or 저밀도 maze로 난이도 조정
+
+---
+
+*작성: 2026-07-06 세션 자동 기록. §2-8, §4의 "측정 예정" 항목은 diverse 배치 완료 후 갱신.*
