@@ -183,6 +183,32 @@ Track 2 (Imitation Learning) v0.3 기준. BC 학습·평가, 에폭 분석, CBS 
 
 ![benchmark](img/fig_benchmark.png)
 
+### 2-11. DAgger 학습 & BC 대비 성능 (2026-07-07)
+- `cnn_diverse.pt`(BC)를 시작점으로 **DAgger 15 iteration** 실행(`scripts/train_dagger.py`).
+  매 스텝 CBS 재라벨, 정책 롤아웃 상태를 누적 학습. 17.6분, 누적 23,639샘플.
+- **CBS-solvable 쉬운 시나리오만**(empty/sparse/rooms, size ≤11, 에이전트 ≤3) 사용 + **CBS 타임아웃 10초 캡**.
+  (첫 시도는 전체 풀 랜덤 사용 → 중간 상태에서 CBS가 90초까지 걸려 1 iteration에 30분 이상 → 오류 H 참고.)
+- held-out action-acc: 0.825 → 0.799 (**소폭 하락**). 단 held-out은 *전문가 궤적 위* 정확도라
+  DAgger의 이득(롤아웃 회복)과는 다른 지표 → **표준 벤치마크 success-rate로 판정**.
+
+  | 맵 | 에이전트 | BC success | DAgger success | 변화 |
+  |---|---|---|---|---|
+  | empty-8-8 | 2 | 0.95 | 0.95 | = |
+  | empty-8-8 | 4 | 0.55 | 0.60 | +0.05 |
+  | empty-8-8 | 6 | 0.45 | **0.70** | **+0.25** |
+  | empty-8-8 | 8 | 0.25 | 0.30 | +0.05 |
+  | random-32-32-10 | 2 | 0.70 | 0.50 | −0.20 |
+  | random-32-32-10 | 4 | 0.30 | 0.20 | −0.10 |
+
+- **혼합 결과**: 학습 분포에 가까운 **empty-8-8(소형·개방)에서 다중 에이전트 성공률 개선**(6명 +0.25)으로
+  DAgger 효과 입증. 반면 **미학습 대형맵 random-32-32-10에서는 하락**.
+- **원인**: 속도를 위해 DAgger 풀을 소형·소수에이전트로 좁힌 탓에 대형맵 일반화가 약해짐 +
+  random-32-32-10 인스턴스 10개라 노이즈 큼 + 저장 모델이 best-iteration이 아닌 마지막 iteration.
+- **결론**: DAgger 자체는 효과적이나 **학습 시나리오 다양성이 일반화를 좌우**. 다음은 풀 확대(대형맵 포함)와
+  best-iteration 체크포인트 선택.
+
+![dagger](img/fig_dagger.png)
+
 ---
 
 ## 3. 발생한 오류와 해결 (트러블슈팅)
@@ -196,6 +222,8 @@ Track 2 (Imitation Learning) v0.3 기준. BC 학습·평가, 에폭 분석, CBS 
 | E | v0.2 산출물을 그대로 쓰면 학습이 "성공"하는데 결과가 이상할 위험 | v0.3에서 grid 채널 **의미**만 바뀌고 shape은 동일 → 에러 없이 로드되나 의미가 틀림 | 기존 `.npz`/`.pt` 전부 삭제 후 v0.3로 재생성 (조용한 오염 방지) |
 | F | `full_sweep` 45개 중 7개 CBS 실패 | maze/n5/대형 맵에서 CBS 탐색이 타임아웃 | timeout 45→90 상향으로 일부 시도했으나 maze·대형-n5는 구조적으로 미해결 → 다양화 시 해당 조합 최소화로 우회 |
 | G | MovingAI `.map` 직접 URL이 raw 대신 HTML 메뉴 반환, per-map 시나리오 zip은 404 | movingai.com은 파일을 묶음 zip으로 배포 | 전체 맵 `mapf-map.zip`, 시나리오 `mapf-scen-random.zip`를 받아 풀어서 사용 |
+| H | DAgger 1 iteration이 30분 넘게 안 끝남(멈춘 듯) | `get_expert_actions`가 매 스텝 CBS 재호출 + 시뮬레이터 CBS 타임아웃 기본 90초 → 중간 상태가 어려우면 한 스텝에 수십 초 | 학습 풀을 CBS-solvable 쉬운 시나리오로 제한 + `MAPFStepSimulator`에 `cbs_timeout_sec` 인자 추가해 10초로 캡 + `py -u`로 실시간 로그 |
+| I | DAgger 후 held-out acc가 오히려 하락(0.825→0.799) | held-out은 전문가 궤적 정확도라 DAgger(롤아웃 회복 학습) 목적과 지표가 다름 | 판정은 벤치마크 success-rate로. 실제로 소형맵 다중 에이전트 성공률은 개선됨(§2-11) |
 
 ---
 
@@ -279,8 +307,9 @@ Track 2 (Imitation Learning) v0.3 기준. BC 학습·평가, 에폭 분석, CBS 
 - [x] 확장 데이터로 CNN 재학습 → held-out 0.772→0.825 (모든 액션 개선 확인)
 - [x] 시뮬레이터(`MAPFStepSimulator`) 도착·검증, DAgger 루프 동작 확인 (§2-9)
 - [x] MovingAI 표준 벤치마크 평가 (`empty-8-8`, `random-32-32-10`; action-acc + success-rate) (§2-10)
-- [ ] **DAgger 학습 실행** — 이제 시뮬레이터가 있으니, BC-사전학습 CNN에서 DAgger로 success-rate 개선 측정
-      (특히 다중 에이전트에서 롤아웃 오차 누적 완화 기대)
+- [x] **DAgger 학습 실행** — empty-8-8 다중 에이전트 성공률 개선(6명 0.45→0.70), 대형맵은 하락(§2-11)
+- [ ] **DAgger 풀 확대 재학습** — 대형맵(32×32 등) 포함해 대형맵 일반화 개선 시도
+- [ ] DAgger best-iteration 체크포인트 저장(현재는 마지막 iteration 저장)
 - [ ] 표준 벤치마크 success-rate를 더 큰 맵/에이전트로 확장(정책 롤아웃은 CBS 불필요)
 - [ ] 좌(Left) F1 최약점(0.656) 추가 개선 — 좌 방향 편향 시나리오 보강 검토
 - [ ] `train.py` best-val 체크포인트 저장 로직 추가
