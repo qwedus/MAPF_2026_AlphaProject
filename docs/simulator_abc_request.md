@@ -1,9 +1,5 @@
-# [요청] DAgger용 `MAPFSimulator` step 단위 시뮬레이터 구현 (시뮬레이터 팀 → qwedus)
+# [요청] DAgger용 `MAPFSimulator` step 단위 시뮬레이터 구현 (qwedus)
 
-작성: Track 2 (IL)
-기준 표준: **v0.3** ([channel_spec_v0.3_notes.md](../channel_spec_v0.3_notes.md), `spec.py`)
-
----
 
 ## 1. 요청 한 줄 요약
 
@@ -123,27 +119,8 @@ obs = {
 
 좌표계는 (row, col), 원점 좌상단 (0,0).
 
-## 6. 넘겨받은 뒤 IL 쪽에서 할 일 (참고용)
 
-구현본을 받으면 IL 쪽은 별도 수정 없이 아래처럼 바로 실행합니다:
-
-```python
-from dagger import DAggerTrainer, MAPFSimulator
-sim   = YourSimulator(...)         # 구현체
-model = ActionMLP().to(device)     # BC로 pre-train한 것 권장
-opt   = torch.optim.Adam(model.parameters(), lr=1e-3)
-trainer = DAggerTrainer(model, opt, sim, mode="mlp", device=device)
-
-for it in range(n_iter):
-    trainer.collect(map_grid, starts, goals, max_steps=200)  # reset/step/get_expert_actions 호출
-    trainer.train(epochs=10)
-    trainer.save(f"dagger_iter{it}.pt")
-```
-
-즉 **`reset`/`step`/`get_expert_actions` 3개만 표준대로 구현**되면 나머지(정책 추론, 재학습,
-정규화, 저장)는 `DAggerTrainer`가 전부 처리합니다.
-
-## 7. 인수 확인용 최소 체크리스트
+## 6. 인수 확인용 최소 체크리스트
 
 - [ ] `class YourSimulator(MAPFSimulator)` 로 ABC 상속, 3개 메서드 구현
 - [ ] `reset` 반환 obs가 4절 포맷과 정확히 일치 (`grid` shape `(3,5,5)` float32, `goal_dir` shape `(2,)` raw)
@@ -154,6 +131,3 @@ for it in range(n_iter):
 - [ ] 간단 스모크: `sim.reset(...)` → `sim.step({aid: 4 for aid in obs})` 가 에러 없이 도는지
 
 ---
-
-문의: 위 인터페이스/포맷에서 애매한 부분 있으면 IL 쪽에 바로 물어봐 주세요. obs 포맷만
-표준대로 맞으면 연결은 즉시 됩니다.
