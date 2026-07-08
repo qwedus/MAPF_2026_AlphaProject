@@ -4,6 +4,7 @@ BC 학습 루프. MLP/CNN 공통.
 GT 없이 더미로 돌려서 loss 하강 / acc 상승을 확인하는 게 1차 목표.
 """
 import argparse
+import copy
 import numpy as np
 import torch
 import torch.nn as nn
@@ -72,21 +73,33 @@ def main():
     print(f"[{args.mode}] device={device}  params={n_param:,}  "
           f"train={len(tr)} val={len(va)}")
 
+    best_acc = -1.0
+    best_state = copy.deepcopy(model.state_dict())
+    best_epoch = 0
     for ep in range(1, args.epochs + 1):
         trl, tra = run_epoch(model, tl, args.mode, device, optim)
         val, vaa = run_epoch(model, vl, args.mode, device, None)
+        flag = ""
+        if vaa > best_acc:   # 지금까지 최고 val acc → 스냅샷 보관 (과적합 전 시점)
+            best_acc = vaa
+            best_state = copy.deepcopy(model.state_dict())
+            best_epoch = ep
+            flag = "  *best"
         print(f"ep{ep:02d}  train_loss={trl:.3f} acc={tra:.3f}  "
-              f"| val_loss={val:.3f} acc={vaa:.3f}")
+              f"| val_loss={val:.3f} acc={vaa:.3f}{flag}")
 
     # 무작위 베이스라인(5클래스 → 0.2) 대비 확인
-    print(f"\n무작위 기준 acc=0.200 / 최종 val acc={vaa:.3f}")
+    print(f"\n무작위 기준 acc=0.200 / 최종 val acc={vaa:.3f} "
+          f"/ best val acc={best_acc:.3f} (ep{best_epoch})")
     torch.save({
-        "model_state": model.state_dict(),
+        "model_state": best_state,   # 마지막이 아니라 best-val 시점 가중치
         "mode": args.mode,
         "goal_mean": ds.goal_mean,   # (1,2) — infer/eval에서 동일 정규화
         "goal_std":  ds.goal_std,    # (1,2)
+        "best_epoch": best_epoch,
+        "best_val_acc": best_acc,
     }, f"{args.mode}.pt")
-    print(f"저장: {args.mode}.pt")
+    print(f"저장: {args.mode}.pt  (best-val, ep{best_epoch}, acc={best_acc:.3f})")
 
 
 if __name__ == "__main__":
