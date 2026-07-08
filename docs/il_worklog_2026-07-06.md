@@ -164,4 +164,6 @@ DAgger·롤아웃 평가는 시뮬레이터 팀의 `MAPFStepSimulator`(`simulato
       대형맵+다수 에이전트는 CBS 라벨 부재로 여전히 실패
 - [ ] 하이브리드 프로토타입 — CBS도 IL도 실패하는 "대형맵+다수 에이전트" 구간 대응 (IL 1차 + 국소 CBS)
 - [ ] 하이브리드 프로토타입: IL 1차 + 실패/충돌 시 국소 CBS
-- [ ] `train.py` best-val 체크포인트 저장 (현재 마지막 에폭만 저장 → MLP 과적합 회피)
+- [x] `train.py` best-val 체크포인트 저장 — 최고 val acc 에폭 스냅샷 저장(+best_epoch/acc). BC CNN 4종
+      재학습(cnn/diverse/big/bigdense), cnn_big은 ep45가 최고라 ep55 대비 +0.008. `train_dagger.py`엔
+      `--save-iters`(iter별 스냅샷)만 추가 — DAgger 가치는 held-out acc로 안 잡혀 best-acc 선택은 금물
