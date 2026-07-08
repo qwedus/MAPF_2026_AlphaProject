@@ -227,11 +227,10 @@ def main():
         columns = [("empty-8-8", 4), ("empty-8-8", 6), ("empty-8-8", 8),
                    ("empty-16-16", 8), ("random-32-32-10", 4), ("random-32-32-10", 8),
                    ("random-32-32-20", 8), ("room-32-32-4", 8), ("maze-32-32-2", 8)]
-        model_order = ["MLP-BC", "CNN-BC(1.6k)", "CNN-BC(13.7k)", "CNN-big(27.7k)",
-                       "CNN-bigdense(47k)", "CNN-DAgger", "CNN-DAgger-ext"]
+        model_order = ["MLP(47k)", "CNN(1.6k)", "CNN(13.7k)", "CNN(27.7k)",
+                       "CNN(47k)", "DAgger(47k)"]
         out = IMG_DIR / "fig_deadlock_all.png"
-        plot_deadlock([PROJECT_ROOT / "outputs" / "deadlock_small.json",
-                       PROJECT_ROOT / "outputs" / "deadlock_big.json"],
+        plot_deadlock([PROJECT_ROOT / "outputs" / "deadlock_final.json"],
                       out, columns, model_order)
         print(f"figure -> {out}")
         return

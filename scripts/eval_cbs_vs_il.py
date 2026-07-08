@@ -41,10 +41,10 @@ from src.cbs_adapter import CBSAdapter, CBSAdapterConfig
 from scripts.eval_movingai_benchmark import parse_map, parse_scen, dedup_agents
 
 LABELS = {  # ckpt filename -> short label
-    "mlp.pt": "MLP-BC", "cnn.pt": "CNN-BC(1.6k)",
-    "cnn_diverse.pt": "CNN-BC(13.7k)", "cnn_big.pt": "CNN-big(27.7k)",
-    "cnn_bigdense.pt": "CNN-bigdense(47k)", "cnn_dagger.pt": "CNN-DAgger",
-    "cnn_dagger_ext.pt": "CNN-DAgger-ext",
+    "mlp.pt": "MLP-BC", "mlp_final.pt": "MLP(47k)", "cnn.pt": "CNN(1.6k)",
+    "cnn_diverse.pt": "CNN(13.7k)", "cnn_big.pt": "CNN(27.7k)",
+    "cnn_bigdense.pt": "CNN(47k)", "cnn_dagger.pt": "CNN-DAgger",
+    "cnn_dagger_ext.pt": "CNN-DAgger-ext", "cnn_dagger_final.pt": "DAgger(47k)",
 }
 
 
