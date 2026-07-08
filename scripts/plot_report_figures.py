@@ -20,6 +20,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -165,6 +166,47 @@ def plot_expansion(pairs, out):
     fig.savefig(out, dpi=120, bbox_inches="tight"); plt.close(fig)
 
 
+def plot_deadlock(json_paths, out, columns, model_order):
+    """Two heatmaps (rows=models, cols=(map,n)) from eval_deadlock JSONs:
+    success rate, and DL/fail (of failed episodes, fraction that were stuck)."""
+    rows = []
+    for p in json_paths:
+        if Path(p).is_file():
+            rows += json.loads(Path(p).read_text())
+    by_key = {(r["map"], r["n"], r["model"]): r for r in rows}
+
+    col_labels = [f"{m.replace('random-32-32-', 'rand').replace('-32-32-', '')}\nn{n}"
+                  for m, n in columns]
+    succ = np.full((len(model_order), len(columns)), np.nan)
+    dlf = np.full((len(model_order), len(columns)), np.nan)
+    for i, model in enumerate(model_order):
+        for j, (m, n) in enumerate(columns):
+            r = by_key.get((m, n, model))
+            if r is not None:
+                succ[i, j] = r["succ"]
+                dlf[i, j] = r.get("dl_share", np.nan)
+
+    fig, axes = plt.subplots(1, 2, figsize=(1.15 * len(columns) + 3.5, 0.55 * len(model_order) + 2))
+    for ax, data, title, cmap in [
+        (axes[0], succ, "Success rate (higher=better)", "Greens"),
+        (axes[1], dlf, "DL/fail: of failures, fraction stuck (lower=better)", "Reds"),
+    ]:
+        im = ax.imshow(data, cmap=cmap, vmin=0, vmax=1, aspect="auto")
+        ax.set_xticks(range(len(columns))); ax.set_xticklabels(col_labels, fontsize=7)
+        ax.set_yticks(range(len(model_order))); ax.set_yticklabels(model_order, fontsize=8)
+        ax.set_title(title, fontsize=10)
+        for i in range(data.shape[0]):
+            for j in range(data.shape[1]):
+                if not np.isnan(data[i, j]):
+                    ax.text(j, i, f"{data[i, j]:.2f}", ha="center", va="center",
+                            color="white" if data[i, j] > 0.5 else "black", fontsize=7)
+        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    fig.suptitle("Deadlock analysis across models x regimes "
+                 "(open maps: failure = deadlock; dense/walls: failure = lost)", fontsize=11)
+    fig.tight_layout()
+    fig.savefig(out, dpi=120, bbox_inches="tight"); plt.close(fig)
+
+
 def action_dist(npz_path):
     d = np.load(npz_path)
     return int(len(d[spec.KEY_ACT])), np.bincount(d[spec.KEY_ACT], minlength=spec.NUM_ACTIONS).tolist()
@@ -176,8 +218,23 @@ def main():
     ap.add_argument("--heldout", default="real_v03.npz")
     ap.add_argument("--expanded", default=None)
     ap.add_argument("--epochs", type=int, default=60)
+    ap.add_argument("--deadlock", action="store_true",
+                    help="only render the deadlock heatmap from outputs/deadlock_*.json (no training)")
     args = ap.parse_args()
     IMG_DIR.mkdir(parents=True, exist_ok=True)
+
+    if args.deadlock:  # JSON-driven, no model training needed
+        columns = [("empty-8-8", 4), ("empty-8-8", 6), ("empty-8-8", 8),
+                   ("empty-16-16", 8), ("random-32-32-10", 4), ("random-32-32-10", 8),
+                   ("random-32-32-20", 8), ("room-32-32-4", 8), ("maze-32-32-2", 8)]
+        model_order = ["MLP-BC", "CNN-BC(1.6k)", "CNN-BC(13.7k)", "CNN-big(27.7k)",
+                       "CNN-bigdense(47k)", "CNN-DAgger", "CNN-DAgger-ext"]
+        out = IMG_DIR / "fig_deadlock_all.png"
+        plot_deadlock([PROJECT_ROOT / "outputs" / "deadlock_small.json",
+                       PROJECT_ROOT / "outputs" / "deadlock_big.json"],
+                      out, columns, model_order)
+        print(f"figure -> {out}")
+        return
 
     # 1) epoch curves + held-out confusion on baseline
     histories, cms = {}, []

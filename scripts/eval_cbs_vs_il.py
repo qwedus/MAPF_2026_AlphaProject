@@ -42,7 +42,9 @@ from scripts.eval_movingai_benchmark import parse_map, parse_scen, dedup_agents
 
 LABELS = {  # ckpt filename -> short label
     "mlp.pt": "MLP-BC", "cnn.pt": "CNN-BC(1.6k)",
-    "cnn_diverse.pt": "CNN-BC(13.7k)", "cnn_dagger.pt": "CNN-DAgger",
+    "cnn_diverse.pt": "CNN-BC(13.7k)", "cnn_big.pt": "CNN-big(27.7k)",
+    "cnn_bigdense.pt": "CNN-bigdense(47k)", "cnn_dagger.pt": "CNN-DAgger",
+    "cnn_dagger_ext.pt": "CNN-DAgger-ext",
 }
 
 

@@ -70,41 +70,50 @@ def rollout(m, grid, sd, gd, max_steps):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--bench-dir", type=Path, required=True)
-    ap.add_argument("--map", default="empty-8-8")
+    ap.add_argument("--map", "--maps", dest="maps", nargs="+", default=["empty-8-8"],
+                    help="one or more MovingAI map names to sweep")
     ap.add_argument("--agents", type=int, nargs="+", default=[4, 5, 6, 7, 8])
     ap.add_argument("--instances", type=int, default=25)
     ap.add_argument("--ckpts", nargs="+", default=["cnn_diverse.pt", "cnn_dagger.pt"])
     ap.add_argument("--max-steps", type=int, default=80)
+    ap.add_argument("--out", default="deadlock.json", help="filename under outputs/")
     args = ap.parse_args()
 
     models = [load_model(PROJECT_ROOT / c) for c in args.ckpts]
-    grid = parse_map(next(args.bench_dir.rglob(f"{args.map}.map")))
-    scen_paths = sorted(args.bench_dir.rglob(f"{args.map}-random-*.scen"))[: args.instances]
-    print(f"map={args.map}  models={[m['name'] for m in models]}  inst<={len(scen_paths)}")
+    print(f"maps={args.maps}  models={[m['name'] for m in models]}  inst<={args.instances}")
     print(f"(succ=success, reached=mean %agents at goal, DL=deadlock rate among all, "
           f"rem=mean final remaining dist)\n")
 
     results = []
-    for n in args.agents:
-        insts = [dedup_agents(parse_scen(sp), n) for sp in scen_paths]
-        insts = [p for p in insts if len(p) == n]
-        print(f"### {args.map}  agents={n}  inst={len(insts)}")
-        for m in models:
-            succ = reached = dl = rem = 0.0
-            for picked in insts:
-                sd = {i: picked[i][0] for i in range(n)}
-                gd = {i: picked[i][1] for i in range(n)}
-                s, r, d, fr = rollout(m, grid, sd, gd, args.max_steps)
-                succ += s; reached += r; dl += d; rem += fr
-            k = len(insts)
-            print(f"    {m['name']:16} succ={succ/k:.2f}  reached={reached/k:.2f}  "
-                  f"DL={dl/k:.2f}  rem={rem/k:5.1f}")
-            results.append({"map": args.map, "n": n, "model": m["name"],
-                            "succ": succ/k, "reached": reached/k, "deadlock": dl/k, "rem": rem/k})
-        print()
+    for mapname in args.maps:
+        grid = parse_map(next(args.bench_dir.rglob(f"{mapname}.map")))
+        scen_paths = sorted(args.bench_dir.rglob(f"{mapname}-random-*.scen"))[: args.instances]
+        for n in args.agents:
+            insts = [dedup_agents(parse_scen(sp), n) for sp in scen_paths]
+            insts = [p for p in insts if len(p) == n]
+            if not insts:
+                continue
+            print(f"### {mapname}  agents={n}  inst={len(insts)}")
+            for m in models:
+                succ = reached = dl = rem = 0.0
+                for picked in insts:
+                    sd = {i: picked[i][0] for i in range(n)}
+                    gd = {i: picked[i][1] for i in range(n)}
+                    s, r, d, fr = rollout(m, grid, sd, gd, args.max_steps)
+                    succ += s; reached += r; dl += d; rem += fr
+                k = len(insts)
+                # DL-share = of the FAILED episodes, how many were stuck deadlocks
+                fails = k - succ
+                dl_share = (dl / fails) if fails > 0 else 0.0
+                print(f"    {m['name']:18} succ={succ/k:.2f}  reached={reached/k:.2f}  "
+                      f"DL={dl/k:.2f}  DL/fail={dl_share:.2f}  rem={rem/k:5.1f}")
+                results.append({"map": mapname, "n": n, "model": m["name"],
+                                "succ": succ/k, "reached": reached/k, "deadlock": dl/k,
+                                "dl_share": dl_share, "rem": rem/k})
+            print()
 
     import json
-    out = PROJECT_ROOT / "outputs" / "deadlock.json"
+    out = PROJECT_ROOT / "outputs" / args.out
     out.write_text(json.dumps(results, indent=2))
     print(f"saved {out}")
     return results
