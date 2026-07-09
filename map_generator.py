@@ -1,273 +1,151 @@
-"""
-길막금지(NoDeadlock) — 통합 맵 제너레이터 (역할 A) / CBS 내부 표준 준수 버전
+## 📌 개요
 
-[ 좌표계 — CBS 표준 ]
-  외부 출력은 [x, y]. x=오른쪽(열) 증가, y=아래쪽(행) 증가, 원점 좌상단 [0,0].
-  ※ 내부 계산은 numpy 친화적인 (row, col)로 하고,
-    JSON으로 내보낼 때 딱 한 곳(rc_to_xy)에서 [x, y] = [col, row]로 뒤집는다.
+이 모듈은 MAPF(Multi-Agent Path Finding) 실험에 필요한 두 가지 산출물을 생성합니다.
 
-[ 출력물 ]
-  1) grid_map : 2D numpy int (0=빈칸, 1=벽)  ← 시뮬레이터/시각화용
-  2) Scenario JSON : { scenario_id, map_id, map_file, agents:[{agent_id,start,goal}] }
-     start/goal은 [x, y] 형식.
+1. **grid_map** — 벽/빈칸으로 이루어진 2D `numpy` 배열 (`0`=빈칸, `1`=벽)
+2. **Scenario JSON** — 에이전트별 시작/목표 좌표를 담은 시나리오 파일 (CBS 표준 좌표계 사용)
 
-[ 맵 유형 ] empty / sparse / dense / rooms / maze
-"""
+맵 유형은 `empty`, `sparse`, `dense`, `rooms`, `maze` 5종을 지원하며, 모든 에이전트가 **연결된 하나의 자유 공간**에서 시작/목표를 배정받도록 도달 가능성을 보장합니다.
 
-import json
-import numpy as np
-import matplotlib
-import matplotlib.pyplot as plt
-from collections import deque
+---
 
-def rc_to_xy(rc):
-    """내부 (row, col)  ->  CBS 표준 [x, y] = [col, row]."""
-    r, c = rc
-    return [int(c), int(r)]
+## 🧭 좌표계 규칙 (중요)
 
-# ===============================================================
-# 1. 공통 부품 (모든 맵 유형이 공유)
-# ===============================================================
-def largest_free_component(grid_map):
-    """빈칸(0) 중 가장 큰 '연결된 덩어리'의 (row,col) 리스트 (4방향)."""
-    rows, cols = grid_map.shape
-    visited = np.zeros_like(grid_map, dtype=bool)
-    best = []
-    for r in range(rows):
-        for c in range(cols):
-            if grid_map[r, c] == 0 and not visited[r, c]:
-                comp, q = [], deque([(r, c)])
-                visited[r, c] = True
-                while q:
-                    cr, cc = q.popleft()
-                    comp.append((cr, cc))
-                    for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):
-                        nr, nc = cr + dr, cc + dc
-                        if (0 <= nr < rows and 0 <= nc < cols
-                                and grid_map[nr, nc] == 0 and not visited[nr, nc]):
-                            visited[nr, nc] = True
-                            q.append((nr, nc))
-                if len(comp) > len(best):
-                    best = comp
-    return best
+내부 계산과 외부 출력 좌표계가 다르므로 반드시 숙지해야 합니다.
 
+| 구분 | 좌표계 | 설명 |
+|------|--------|------|
+| 내부 계산 (grid_map, starts_rc, goals_rc) | `(row, col)` | numpy 인덱싱과 자연스럽게 맞물리는 방식 |
+| 외부 출력 (Scenario JSON) | `[x, y]` | CBS 표준. `x`=열(오른쪽 증가), `y`=행(아래쪽 증가), 원점은 좌상단 `[0, 0]` |
 
-def place_agents(grid_map, num_agents, rng):
-    """연결된 빈 공간에서 겹치지 않는 start/goal (row,col)을 뽑는다. 실패 시 (None,None)."""
-    free = largest_free_component(grid_map)
-    if len(free) < 2 * num_agents:
-        return None, None
-    pick = rng.choice(len(free), size=2 * num_agents, replace=False)
-    chosen = [free[i] for i in pick]
-    return chosen[:num_agents], chosen[num_agents:]
+변환은 `rc_to_xy()` 함수 **한 곳**에서만 이루어집니다: `[x, y] = [col, row]`.
+CBS/시뮬레이터 모듈과 연동 시 이 함수 위치만 확인하면 좌표 불일치 버그를 예방할 수 있습니다.
 
+---
 
-# ===============================================================
-# 2. 유형별 벽 배치 (각각 grid_map만 반환)
-# ===============================================================
-def _layout_empty(size, rng):
-    return np.zeros((size, size), dtype=int)
+## 📂 산출물 구조
 
+### 1) grid_map (`.npy`)
+```
+0 0 1 0 0
+0 1 1 0 0
+0 0 0 0 1
+```
+`0`=이동 가능, `1`=벽. `save_grid()`로 저장, `np.load()`로 로드.
 
-def _layout_random(size, rng, p):
-    return (rng.random((size, size)) < p).astype(int)
-
-
-def _layout_rooms(size, rng, doors_per_wall=3):
-    grid = np.zeros((size, size), dtype=int)
-    lines = [size // 3, 2 * size // 3]
-    for x in lines:
-        grid[:, x] = 1
-        grid[x, :] = 1
-    for x in lines:
-        for _ in range(doors_per_wall):
-            grid[rng.integers(0, size), x] = 0
-            grid[x, rng.integers(0, size)] = 0
-    return grid
-
-
-def _layout_maze(size, rng):
-    grid = np.ones((size, size), dtype=int)
-    grid[0, 0] = 0
-    stack = [(0, 0)]
-    while stack:
-        r, c = stack[-1]
-        cand = []
-        for dr, dc in ((-2, 0), (2, 0), (0, -2), (0, 2)):
-            nr, nc = r + dr, c + dc
-            if 0 <= nr < size and 0 <= nc < size and grid[nr, nc] == 1:
-                cand.append((nr, nc, r + dr // 2, c + dc // 2))
-        if cand:
-            nr, nc, wr, wc = cand[rng.integers(len(cand))]
-            grid[nr, nc] = 0
-            grid[wr, wc] = 0
-            stack.append((nr, nc))
-        else:
-            stack.pop()
-    return grid
-
-
-# 유형 이름 -> (벽배치 함수, 권장 size)
-_LAYOUTS = {
-    "empty":  lambda size, rng: _layout_empty(size, rng),
-    "sparse": lambda size, rng: _layout_random(size, rng, p=0.10),
-    "dense":  lambda size, rng: _layout_random(size, rng, p=0.30),
-    "rooms":  lambda size, rng: _layout_rooms(size, rng),
-    "maze":   lambda size, rng: _layout_maze(size, rng),
+### 2) Scenario JSON
+```json
+{
+  "scenario_id": "scen_sparse_s10_n3_0",
+  "map_id": "sparse_s10_n3_0",
+  "map_file": "scenarios/map_sparse_s10_n3_0.npy",
+  "agents": [
+    { "agent_id": 0, "start": [3, 1], "goal": [7, 8] },
+    { "agent_id": 1, "start": [0, 0], "goal": [4, 4] }
+  ]
 }
-MAP_TYPES = list(_LAYOUTS.keys())
+```
+`start`, `goal`은 모두 `[x, y]` 형식입니다.
 
+---
 
-# ===============================================================
-# 3. 메인 — 맵 1개 생성 (도달 보장 포함)
-# ===============================================================
-def generate_map(map_type="sparse", size=10, num_agents=3, seed=None):
-    """리턴: grid_map(numpy), starts_rc, goals_rc  ← 좌표는 내부 (row,col)."""
-    if map_type not in _LAYOUTS:
-        raise ValueError(f"map_type은 {MAP_TYPES} 중 하나여야 함")
-    rng = np.random.default_rng(seed)
-    for _ in range(2000):
-        grid_map = _LAYOUTS[map_type](size, rng)
-        starts, goals = place_agents(grid_map, num_agents, rng)
-        if starts is not None:
-            return grid_map, starts, goals
-    raise RuntimeError("연결된 빈칸 부족: size를 키우거나 num_agents/밀도를 낮추세요.")
+## 🧱 지원하는 맵 유형
 
+| 유형 | 설명 |
+|------|------|
+| `empty` | 벽 없는 빈 맵 |
+| `sparse` | 랜덤 벽, 밀도 10% |
+| `dense` | 랜덤 벽, 밀도 30% |
+| `rooms` | 3분할 벽 + 랜덤 문(door) 배치 |
+| `maze` | DFS 기반 미로 생성 (재귀 백트래킹) |
 
-# ===============================================================
-# 4. CBS 표준 Scenario JSON으로 저장 ([x, y]로 변환해서)
-# ===============================================================
-def to_scenario(grid_map, starts_rc, goals_rc, scenario_id, map_id, map_file):
-    agents = []
-    for aid, (s, g) in enumerate(zip(starts_rc, goals_rc)):
-        agents.append({
-            "agent_id": aid,
-            "start": rc_to_xy(s),   # [x, y] = [col, row]
-            "goal":  rc_to_xy(g),   # [x, y] = [col, row]
-        })
-    return {
-        "scenario_id": scenario_id,
-        "map_id": map_id,
-        "map_file": map_file,
-        "agents": agents,
-    }
+---
 
+## ⚙️ 주요 함수
 
-def save_scenario(scenario, path):
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(scenario, f, ensure_ascii=False, indent=2)
+| 함수 | 역할 |
+|------|------|
+| `generate_map(map_type, size, num_agents, seed)` | 맵 1개 + 에이전트 시작/목표 생성 (도달 가능성 보장, 최대 2000회 재시도) |
+| `place_agents(grid_map, num_agents, rng)` | 가장 큰 연결 컴포넌트에서 겹치지 않는 좌표 샘플링 |
+| `largest_free_component(grid_map)` | BFS로 가장 큰 빈 공간(4방향 연결) 탐색 |
+| `to_scenario(...)` | 내부 좌표를 CBS 표준 JSON으로 변환 |
+| `save_scenario(scenario, path)` / `save_grid(grid_map, path)` | 파일 저장 |
+| `visualize(grid_map, starts_rc, goals_rc, ...)` | matplotlib 기반 맵 + 에이전트 시각화 |
+| `build_dataset(...)` / `build_dev_set(...)` / `build_full_dataset(...)` | 여러 맵 유형·크기·에이전트 수 조합으로 데이터셋 일괄 생성 |
 
+---
 
-def save_grid(grid_map, path):
-    """맵 자체(벽 배치)를 .npy로 저장. scenario의 map_file이 이걸 가리킴."""
-    np.save(path, grid_map)
+## 🚀 사용 예시
 
+### 단일 시나리오 생성
+```python
+from map_generator import generate_map, to_scenario, save_scenario, save_grid, visualize
 
-# ===============================================================
-# 5. 시각화 (내부 (row,col) 기준으로 그린다)
-# ===============================================================
-def visualize(grid_map, starts_rc, goals_rc, title="", save_path=None):
-    n_r, n_c = grid_map.shape
-    fig, ax = plt.subplots(figsize=(6, 6))
-    ax.imshow(grid_map, cmap="Greys", origin="upper", vmin=0, vmax=1)
-    colors = plt.cm.tab10(np.linspace(0, 1, max(len(starts_rc), 1)))
-    for i, (s, g) in enumerate(zip(starts_rc, goals_rc)):
-        ax.scatter(s[1], s[0], color=colors[i], marker="o", s=200,
-                   edgecolors="black", zorder=3, label=f"agent {i}")
-        ax.scatter(g[1], g[0], color=colors[i], marker="*", s=350,
-                   edgecolors="black", zorder=3)
-    ax.set_xticks(np.arange(-0.5, n_c, 1), minor=True)
-    ax.set_yticks(np.arange(-0.5, n_r, 1), minor=True)
-    ax.grid(which="minor", color="gray", linewidth=0.6)
-    ax.set_xticks([]); ax.set_yticks([])
-    ax.set_title(title, fontsize=12)
-    ax.legend(loc="center left", bbox_to_anchor=(1.02, 0.5), frameon=False)
-    plt.tight_layout()
-    if save_path:
-        plt.savefig(save_path, dpi=110, bbox_inches="tight")
-    return fig
+grid, starts_rc, goals_rc = generate_map(
+    map_type="maze", size=12, num_agents=4, seed=42
+)
 
+scen = to_scenario(
+    grid, starts_rc, goals_rc,
+    scenario_id="scen_demo", map_id="maze_demo", map_file="maze_demo.npy"
+)
 
-# ===============================================================
-# 6. 5종 한 번에 만들고 저장하는 헬퍼
-# ===============================================================
-# ===============================================================
-# 6. 랜덤 크기·에이전트 수로 데이터셋 생성
-# ===============================================================
-def build_dataset(size_range=(8, 16), agent_range=(2, 6),
-                   num_samples_per_type=5,
-                   base_seed=0, out_dir="scenarios"):
-    """맵 유형별로, 크기와 에이전트 수를 무작위 범위 내에서 뽑아 여러 샘플 생성.
+save_grid(grid, "maze_demo.npy")
+save_scenario(scen, "scenario_demo.json")
+visualize(grid, starts_rc, goals_rc, title="maze demo", save_path="preview.png")
+```
 
-    size_range=(a, b)  -> a 이상 b 미만 정수 중 무작위 (예: (8,16) → 8~15)
-    agent_range=(a, b) -> a 이상 b 미만 정수 중 무작위 (예: (2,6) → 2~5)
-    """
-    import os
-    os.makedirs(out_dir, exist_ok=True)
-    results = {}
-    failed = []
-    rng_master = np.random.default_rng(base_seed)  # 크기/에이전트수 뽑기 전용 rng
-    seed = base_seed
+### 개발용 데이터셋 한 번에 생성
+```python
+from map_generator import build_dev_set
 
-    for mtype in MAP_TYPES:
-        for sample_idx in range(num_samples_per_type):
-            size = int(rng_master.integers(size_range[0], size_range[1]))
-            n = int(rng_master.integers(agent_range[0], agent_range[1]))
-            tag = f"{mtype}_s{size}_n{n}_{sample_idx}"
+data = build_dev_set(base_seed=0, out_dir="scenarios_dev")
+# 5개 맵 유형(empty/sparse/dense/rooms/maze) × 1개씩, 크기·에이전트 수는 무작위
+```
 
-            try:
-                grid, s_rc, g_rc = generate_map(
-                    mtype, size=size, num_agents=n, seed=seed
-                )
-            except RuntimeError:
-                failed.append(tag)
-                seed += 1
-                continue
+### 전체 데이터셋 생성 (배포용)
+```python
+from map_generator import build_full_dataset
 
-            map_file = f"{out_dir}/map_{tag}.npy"
-            save_grid(grid, map_file)
-            scen = to_scenario(grid, s_rc, g_rc,
-                               scenario_id=f"scen_{tag}",
-                               map_id=tag, map_file=map_file)
-            save_scenario(scen, f"{out_dir}/scenario_{tag}.json")
-            results[tag] = (grid, s_rc, g_rc, scen)
-            seed += 1
+build_full_dataset(
+    size_range=(8, 20), agent_range=(2, 8),
+    num_samples_per_type=30, out_dir="scenarios_full"
+)
+```
 
-    if failed:
-        print(f"\n⚠ 생성 실패 (공간 부족): {len(failed)}개 → {failed}")
-    return results
+### CLI 실행
+```bash
+python map_generator.py
+```
+`scenarios_dev/` 폴더에 유형별 맵(.npy) + 시나리오(.json) + 미리보기 이미지(.png)가 생성됩니다.
 
+---
 
-def build_dev_set(base_seed=0, out_dir="scenarios_dev"):
-    """개발/디버깅용 — 유형별 1개씩, 크기도 무작위(빠른 확인용)."""
-    return build_dataset(size_range=(8, 16), agent_range=(2, 6),
-                          num_samples_per_type=1,
-                          base_seed=base_seed, out_dir=out_dir)
+## 📦 의존성
+```bash
+pip install numpy matplotlib
+```
 
+---
 
-def build_full_dataset(size_range=(8, 20), agent_range=(2, 8),
-                        num_samples_per_type=30,
-                        base_seed=0, out_dir="scenarios_full"):
-    """실제 배포용 — 유형별로 여러 개, 크기/에이전트 수 폭넓게 무작위."""
-    return build_dataset(size_range=size_range, agent_range=agent_range,
-                          num_samples_per_type=num_samples_per_type,
-                          base_seed=base_seed, out_dir=out_dir)
+## 🔗 다른 모듈과의 연동
 
+이 모듈은 팀 프로젝트의 **역할 A(맵/시나리오 생성)** 를 담당하며, 아래 모듈과 좌표계·포맷을 공유합니다.
 
-if __name__ == "__main__":
-    # 지금은 개발 단계 → 5개만 생성 (크기도 무작위)
-    data = build_dev_set()
+- **CBS 어댑터** — `Scenario JSON`의 `[x, y]` 좌표를 입력으로 받아 경로 탐색 수행
+- **Simulator (`MAPFStepSimulator`)** — `grid_map`과 에이전트 시작/목표를 받아 스텝 단위 시뮬레이션 및 충돌 검사
 
-    print(f"총 {len(data)}개 시나리오 생성 완료")
-    for tag, (grid, s_rc, g_rc, scen) in data.items():
-        print(f"[{tag:22s}] 벽 {int(grid.sum()):3d}칸 | agents: {len(scen['agents'])}")
-    print("\n저장 완료: ./scenarios_dev/ 폴더")
+세 모듈을 하나의 `main.py`에서 통합할 때는, 좌표를 항상 `(row, col)` 내부 표준으로 맞추고 `rc_to_xy()` 지점에서만 CBS 표준으로 변환하는 규칙을 지켜야 합니다.
 
-    # 시각화 — maze로 시작하는 키를 찾아서 확인 (태그가 매번 달라지므로)
-    example_tag = next(
-        (k for k in data if k.startswith("maze_")), next(iter(data))
-    )
-    grid, s_rc, g_rc, scen = data[example_tag]
-    visualize(grid, s_rc, g_rc, title=example_tag,
-              save_path=f"scenarios_dev/preview_{example_tag}.png")
-    print(f"미리보기 이미지 저장 완료: scenarios_dev/preview_{example_tag}.png")
+---
+
+## ⚠️ 알려진 주의사항
+
+- `place_agents`는 가장 큰 연결 컴포넌트 하나에서만 에이전트를 배정합니다. 맵이 여러 개의 분리된 영역으로 쪼개져 있으면 일부 영역은 사용되지 않습니다.
+- 밀도가 높거나(`dense`) 크기가 작은 맵에서는 `num_agents`가 너무 많으면 2000회 재시도 후에도 실패(`RuntimeError`)할 수 있습니다. 이 경우 `size`를 늘리거나 `num_agents`/밀도를 낮추세요.
+- CBS 솔버 연동 시 좌표를 `tuple`이 아닌 `list`로 넘기면 장애물 충돌 비교에서 불일치가 발생할 수 있으니(과거 발견된 버그), 어댑터 단에서 타입을 통일해야 합니다.
+
+---
+
+## 📄 라이선스
+프로젝트 루트의 라이선스 정책을 따릅니다.
