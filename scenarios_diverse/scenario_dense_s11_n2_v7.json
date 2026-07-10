@@ -1,0 +1,29 @@
+{
+  "scenario_id": "scen_dense_s11_n2_v7",
+  "map_id": "dense_s11_n2_v7",
+  "map_file": "scenarios_diverse/map_dense_s11_n2_v7.npy",
+  "agents": [
+    {
+      "agent_id": 0,
+      "start": [
+        4,
+        2
+      ],
+      "goal": [
+        1,
+        5
+      ]
+    },
+    {
+      "agent_id": 1,
+      "start": [
+        5,
+        6
+      ],
+      "goal": [
+        8,
+        0
+      ]
+    }
+  ]
+}

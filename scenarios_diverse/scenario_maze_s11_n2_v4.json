@@ -1,0 +1,29 @@
+{
+  "scenario_id": "scen_maze_s11_n2_v4",
+  "map_id": "maze_s11_n2_v4",
+  "map_file": "scenarios_diverse/map_maze_s11_n2_v4.npy",
+  "agents": [
+    {
+      "agent_id": 0,
+      "start": [
+        4,
+        1
+      ],
+      "goal": [
+        0,
+        10
+      ]
+    },
+    {
+      "agent_id": 1,
+      "start": [
+        6,
+        8
+      ],
+      "goal": [
+        4,
+        0
+      ]
+    }
+  ]
+}

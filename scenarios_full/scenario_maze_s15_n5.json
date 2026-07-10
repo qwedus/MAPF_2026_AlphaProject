@@ -1,0 +1,62 @@
+{
+  "scenario_id": "scen_maze_s15_n5",
+  "map_id": "maze_s15_n5",
+  "map_file": "scenarios_full/map_maze_s15_n5.npy",
+  "agents": [
+    {
+      "agent_id": 0,
+      "start": [
+        0,
+        9
+      ],
+      "goal": [
+        6,
+        14
+      ]
+    },
+    {
+      "agent_id": 1,
+      "start": [
+        8,
+        13
+      ],
+      "goal": [
+        6,
+        4
+      ]
+    },
+    {
+      "agent_id": 2,
+      "start": [
+        3,
+        14
+      ],
+      "goal": [
+        13,
+        8
+      ]
+    },
+    {
+      "agent_id": 3,
+      "start": [
+        4,
+        8
+      ],
+      "goal": [
+        10,
+        10
+      ]
+    },
+    {
+      "agent_id": 4,
+      "start": [
+        6,
+        0
+      ],
+      "goal": [
+        14,
+        7
+      ]
+    }
+  ]
+}

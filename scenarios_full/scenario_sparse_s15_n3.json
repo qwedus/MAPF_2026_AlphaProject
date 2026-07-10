@@ -1,0 +1,40 @@
+{
+  "scenario_id": "scen_sparse_s15_n3",
+  "map_id": "sparse_s15_n3",
+  "map_file": "scenarios_full/map_sparse_s15_n3.npy",
+  "agents": [
+    {
+      "agent_id": 0,
+      "start": [
+        0,
+        7
+      ],
+      "goal": [
+        2,
+        8
+      ]
+    },
+    {
+      "agent_id": 1,
+      "start": [
+        5,
+        5
+      ],
+      "goal": [
+        5,
+        2
+      ]
+    },
+    {
+      "agent_id": 2,
+      "start": [
+        13,
+        1
+      ],
+      "goal": [
+        4,
+        4
+      ]
+    }
+  ]
+}

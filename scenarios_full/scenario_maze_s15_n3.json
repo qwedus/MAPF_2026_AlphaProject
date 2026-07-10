@@ -1,0 +1,40 @@
+{
+  "scenario_id": "scen_maze_s15_n3",
+  "map_id": "maze_s15_n3",
+  "map_file": "scenarios_full/map_maze_s15_n3.npy",
+  "agents": [
+    {
+      "agent_id": 0,
+      "start": [
+        11,
+        14
+      ],
+      "goal": [
+        12,
+        5
+      ]
+    },
+    {
+      "agent_id": 1,
+      "start": [
+        12,
+        9
+      ],
+      "goal": [
+        13,
+        0
+      ]
+    },
+    {
+      "agent_id": 2,
+      "start": [
+        7,
+        4
+      ],
+      "goal": [
+        14,
+        6
+      ]
+    }
+  ]
+}

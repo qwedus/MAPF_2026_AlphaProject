@@ -1,0 +1,62 @@
+{
+  "scenario_id": "scen_big_empty_s15_n5_v1",
+  "map_id": "empty_s15_n5_v1",
+  "map_file": "scenarios_bigmap/map_empty_s15_n5_v1.npy",
+  "agents": [
+    {
+      "agent_id": 0,
+      "start": [
+        10,
+        4
+      ],
+      "goal": [
+        11,
+        12
+      ]
+    },
+    {
+      "agent_id": 1,
+      "start": [
+        7,
+        11
+      ],
+      "goal": [
+        9,
+        9
+      ]
+    },
+    {
+      "agent_id": 2,
+      "start": [
+        3,
+        3
+      ],
+      "goal": [
+        3,
+        7
+      ]
+    },
+    {
+      "agent_id": 3,
+      "start": [
+        12,
+        11
+      ],
+      "goal": [
+        5,
+        10
+      ]
+    },
+    {
+      "agent_id": 4,
+      "start": [
+        4,
+        0
+      ],
+      "goal": [
+        11,
+        10
+      ]
+    }
+  ]
+}

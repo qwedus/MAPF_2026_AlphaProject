@@ -1,0 +1,62 @@
+{
+  "scenario_id": "scen_rooms_s11_n5_v0",
+  "map_id": "rooms_s11_n5_v0",
+  "map_file": "scenarios_diverse/map_rooms_s11_n5_v0.npy",
+  "agents": [
+    {
+      "agent_id": 0,
+      "start": [
+        6,
+        9
+      ],
+      "goal": [
+        0,
+        8
+      ]
+    },
+    {
+      "agent_id": 1,
+      "start": [
+        4,
+        10
+      ],
+      "goal": [
+        8,
+        8
+      ]
+    },
+    {
+      "agent_id": 2,
+      "start": [
+        7,
+        9
+      ],
+      "goal": [
+        3,
+        8
+      ]
+    },
+    {
+      "agent_id": 3,
+      "start": [
+        5,
+        5
+      ],
+      "goal": [
+        6,
+        6
+      ]
+    },
+    {
+      "agent_id": 4,
+      "start": [
+        10,
+        9
+      ],
+      "goal": [
+        0,
+        10
+      ]
+    }
+  ]
+}

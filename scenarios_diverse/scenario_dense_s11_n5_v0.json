@@ -1,0 +1,62 @@
+{
+  "scenario_id": "scen_dense_s11_n5_v0",
+  "map_id": "dense_s11_n5_v0",
+  "map_file": "scenarios_diverse/map_dense_s11_n5_v0.npy",
+  "agents": [
+    {
+      "agent_id": 0,
+      "start": [
+        6,
+        9
+      ],
+      "goal": [
+        10,
+        1
+      ]
+    },
+    {
+      "agent_id": 1,
+      "start": [
+        10,
+        9
+      ],
+      "goal": [
+        10,
+        6
+      ]
+    },
+    {
+      "agent_id": 2,
+      "start": [
+        8,
+        5
+      ],
+      "goal": [
+        9,
+        9
+      ]
+    },
+    {
+      "agent_id": 3,
+      "start": [
+        10,
+        0
+      ],
+      "goal": [
+        8,
+        9
+      ]
+    },
+    {
+      "agent_id": 4,
+      "start": [
+        5,
+        4
+      ],
+      "goal": [
+        10,
+        3
+      ]
+    }
+  ]
+}

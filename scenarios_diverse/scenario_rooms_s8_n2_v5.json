@@ -1,0 +1,29 @@
+{
+  "scenario_id": "scen_rooms_s8_n2_v5",
+  "map_id": "rooms_s8_n2_v5",
+  "map_file": "scenarios_diverse/map_rooms_s8_n2_v5.npy",
+  "agents": [
+    {
+      "agent_id": 0,
+      "start": [
+        3,
+        2
+      ],
+      "goal": [
+        1,
+        4
+      ]
+    },
+    {
+      "agent_id": 1,
+      "start": [
+        1,
+        1
+      ],
+      "goal": [
+        5,
+        4
+      ]
+    }
+  ]
+}

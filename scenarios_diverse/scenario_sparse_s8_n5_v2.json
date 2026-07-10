@@ -1,0 +1,62 @@
+{
+  "scenario_id": "scen_sparse_s8_n5_v2",
+  "map_id": "sparse_s8_n5_v2",
+  "map_file": "scenarios_diverse/map_sparse_s8_n5_v2.npy",
+  "agents": [
+    {
+      "agent_id": 0,
+      "start": [
+        7,
+        5
+      ],
+      "goal": [
+        1,
+        1
+      ]
+    },
+    {
+      "agent_id": 1,
+      "start": [
+        2,
+        0
+      ],
+      "goal": [
+        0,
+        0
+      ]
+    },
+    {
+      "agent_id": 2,
+      "start": [
+        6,
+        4
+      ],
+      "goal": [
+        5,
+        4
+      ]
+    },
+    {
+      "agent_id": 3,
+      "start": [
+        7,
+        3
+      ],
+      "goal": [
+        4,
+        1
+      ]
+    },
+    {
+      "agent_id": 4,
+      "start": [
+        1,
+        0
+      ],
+      "goal": [
+        4,
+        4
+      ]
+    }
+  ]
+}

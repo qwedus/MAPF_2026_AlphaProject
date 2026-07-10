@@ -1,0 +1,40 @@
+{
+  "scenario_id": "scen_big_empty_s20_n3_v1",
+  "map_id": "empty_s20_n3_v1",
+  "map_file": "scenarios_bigmap/map_empty_s20_n3_v1.npy",
+  "agents": [
+    {
+      "agent_id": 0,
+      "start": [
+        11,
+        12
+      ],
+      "goal": [
+        11,
+        18
+      ]
+    },
+    {
+      "agent_id": 1,
+      "start": [
+        2,
+        0
+      ],
+      "goal": [
+        2,
+        8
+      ]
+    },
+    {
+      "agent_id": 2,
+      "start": [
+        16,
+        14
+      ],
+      "goal": [
+        18,
+        14
+      ]
+    }
+  ]
+}

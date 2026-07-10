@@ -1,0 +1,40 @@
+{
+  "scenario_id": "scen_rooms_s15_n3_v4",
+  "map_id": "rooms_s15_n3_v4",
+  "map_file": "scenarios_diverse/map_rooms_s15_n3_v4.npy",
+  "agents": [
+    {
+      "agent_id": 0,
+      "start": [
+        4,
+        14
+      ],
+      "goal": [
+        1,
+        11
+      ]
+    },
+    {
+      "agent_id": 1,
+      "start": [
+        4,
+        2
+      ],
+      "goal": [
+        12,
+        2
+      ]
+    },
+    {
+      "agent_id": 2,
+      "start": [
+        13,
+        5
+      ],
+      "goal": [
+        13,
+        12
+      ]
+    }
+  ]
+}

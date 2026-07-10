@@ -1,0 +1,62 @@
+{
+  "scenario_id": "scen_big_sparse_s11_n5_v0",
+  "map_id": "sparse_s11_n5_v0",
+  "map_file": "scenarios_bigmap/map_sparse_s11_n5_v0.npy",
+  "agents": [
+    {
+      "agent_id": 0,
+      "start": [
+        7,
+        2
+      ],
+      "goal": [
+        1,
+        10
+      ]
+    },
+    {
+      "agent_id": 1,
+      "start": [
+        5,
+        9
+      ],
+      "goal": [
+        6,
+        5
+      ]
+    },
+    {
+      "agent_id": 2,
+      "start": [
+        0,
+        2
+      ],
+      "goal": [
+        8,
+        0
+      ]
+    },
+    {
+      "agent_id": 3,
+      "start": [
+        6,
+        9
+      ],
+      "goal": [
+        2,
+        3
+      ]
+    },
+    {
+      "agent_id": 4,
+      "start": [
+        6,
+        7
+      ],
+      "goal": [
+        10,
+        7
+      ]
+    }
+  ]
+}

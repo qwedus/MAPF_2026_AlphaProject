@@ -1,0 +1,29 @@
+{
+  "scenario_id": "scen_empty_s11_n2_v9",
+  "map_id": "empty_s11_n2_v9",
+  "map_file": "scenarios_diverse/map_empty_s11_n2_v9.npy",
+  "agents": [
+    {
+      "agent_id": 0,
+      "start": [
+        1,
+        3
+      ],
+      "goal": [
+        8,
+        7
+      ]
+    },
+    {
+      "agent_id": 1,
+      "start": [
+        6,
+        4
+      ],
+      "goal": [
+        3,
+        7
+      ]
+    }
+  ]
+}

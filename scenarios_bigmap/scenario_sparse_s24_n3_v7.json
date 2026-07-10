@@ -1,0 +1,40 @@
+{
+  "scenario_id": "scen_big_sparse_s24_n3_v7",
+  "map_id": "sparse_s24_n3_v7",
+  "map_file": "scenarios_bigmap/map_sparse_s24_n3_v7.npy",
+  "agents": [
+    {
+      "agent_id": 0,
+      "start": [
+        8,
+        11
+      ],
+      "goal": [
+        4,
+        0
+      ]
+    },
+    {
+      "agent_id": 1,
+      "start": [
+        9,
+        11
+      ],
+      "goal": [
+        16,
+        7
+      ]
+    },
+    {
+      "agent_id": 2,
+      "start": [
+        16,
+        3
+      ],
+      "goal": [
+        8,
+        12
+      ]
+    }
+  ]
+}
