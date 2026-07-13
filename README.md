@@ -74,14 +74,6 @@ python main.py --map-type sparse --size 10 --num-agents 3 --seed 0
 - `src/cbs_adapter.py`는 `feature/cbs-adapter` 브랜치에서 `tests/`, `scripts/`, `third_party/` 서브모듈을 포함한 `src/` 패키지 구조로 발전했기 때문에, `main.py`는 `cbs_adapter.py`를 루트로 끌어오지 않고 `src.cbs_adapter`로 import합니다. `map_generator.py`, `simulator.py`는 기존대로 루트에 위치합니다.
 - `simulator.py`에는 완성된 경로를 한 번에 검증하는 `Simulator`와, DAgger 학습용 인터랙티브 롤아웃을 위한 `MAPFStepSimulator`가 함께 들어 있습니다.
 
-# 저장소 구조 안내 (길막금지 / NoDeadlock)
-
-CBS와 모방학습(IL) 기반 MAPF 비교분석 프로젝트. 작업이 **역할별로 4개 브랜치**에 나뉘어 있다.
-이 문서는 각 브랜치가 무엇을 담는지, 어떤 파일이 어디 있는지 정리한 것.
-
-최종 산출물: **`결과보고서_길막금지.pdf`** (이 브랜치 `main`에 있음).
-
----
 
 ## 브랜치 지도
 
