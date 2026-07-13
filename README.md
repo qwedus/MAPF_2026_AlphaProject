@@ -95,7 +95,6 @@ python main.py --map-type sparse --size 10 --num-agents 3 --seed 0
 - `src/cbs_adapter.py`, `src/scenario_loader.py`, `src/dataset_exporter.py` : CBS 연동 어댑터·좌표 변환·데이터 내보내기
 - `scenarios_dev/`, `examples/`, `tests/`, `third_party/` : 개발용 시나리오·예제·테스트·외부 CBS(atb033)
 - **`결과보고서_길막금지.pdf`** : 최종 결과보고서
-- **`REPO_GUIDE.md`** : 이 문서
 
 ### `IL` — 모방학습 코드 (Track 2, 코드 원본)
 - `train.py`, `train_dagger*` / `scripts/` : BC/DAgger/navhint 학습 파이프라인
