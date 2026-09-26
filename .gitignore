@@ -226,4 +226,4 @@ outputs/paths/atb033_example_internal_paths.json
 outputs/logs/
 
 # Current-state replanning runtime files
-outputs/paths/replan/
+outputs/paths/replan/outputs/conflict_experiments/
