@@ -221,3 +221,9 @@ scenarios/
 # Generated CBS adapter examples
 outputs/paths/atb033_example/
 outputs/paths/atb033_example_internal_paths.json
+
+# CBS runtime logs
+outputs/logs/
+
+# Current-state replanning runtime files
+outputs/paths/replan/

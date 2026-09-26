@@ -44,6 +44,14 @@ class CBSRunArtifacts:
     stdout: str
     stderr: str
 
+class CBSTimeoutError(RuntimeError):
+    """CBS solver exceeded the configured time limit."""
+    pass
+
+
+class CBSNoSolutionError(RuntimeError):
+    """CBS solver finished but could not find a solution."""
+    pass
 
 def internal_to_atb033(location: GridLocation) -> list[int]:
     """Convert ``(row, col)`` to atb033 ``[x, y]``."""
@@ -67,7 +75,7 @@ def create_atb033_input(
     _validate_inputs(grid_map, starts, goals)
 
     obstacles = [
-        tuple(internal_to_atb033((row, col)))
+        internal_to_atb033((row, col))
         for row in range(height)
         for col in range(width)
         if _grid_value(grid_map, row, col) == 1
@@ -117,10 +125,25 @@ def run_atb033_cbs(
     if output_path.exists():
         output_path.unlink()
 
+    # atb033 CBS는 obstacle을 (x, y) tuple과 비교하므로
+    # solver에 전달할 YAML에서는 obstacle을 tuple로 변환한다.
+    with input_path.open("r", encoding="utf-8") as handle:
+        solver_payload = yaml.safe_load(handle) or {}
+
+    solver_payload["map"]["obstacles"] = [
+        tuple(obstacle)
+        for obstacle in solver_payload["map"]["obstacles"]
+    ]
+
+    solver_input_path = input_path.with_name("solver_input.yaml")
+
+    with solver_input_path.open("w", encoding="utf-8") as handle:   
+        yaml.dump(solver_payload, handle, sort_keys=False)
+
     command = [
         python_executable or sys.executable,
         "cbs.py",
-        str(input_path),
+        str(solver_input_path),
         str(output_path),
     ]
     try:
@@ -133,7 +156,7 @@ def run_atb033_cbs(
             check=False,
         )
     except subprocess.TimeoutExpired as exc:
-        raise RuntimeError(
+        raise CBSTimeoutError(
             "atb033 CBS timed out after "
             f"{timeout_sec}s\nstdout:\n{exc.stdout or ''}\nstderr:\n{exc.stderr or ''}"
         ) from exc
@@ -148,9 +171,12 @@ def run_atb033_cbs(
             f"stderr:\n{result.stderr}"
         )
     if not output_path.is_file():
+        if "solution not found" in (result.stdout or "").lower():
+            raise CBSNoSolutionError(
+                "atb033 CBS finished but no solution was found."
+            )
         raise RuntimeError(
-            "atb033 CBS did not create output YAML. "
-            "The instance may be unsolved.\n"
+            "atb033 CBS did not create output YAML.\n "
             f"stdout:\n{result.stdout}\n"
             f"stderr:\n{result.stderr}"
         )

@@ -22,11 +22,70 @@
 """
 
 import argparse
-
+import time
+import csv
+from datetime import datetime
+from pathlib import Path
 from map_generator import generate_map, MAP_TYPES        # 역할 A
-from src.cbs_adapter import CBSAdapter, CBSAdapterConfig  # 역할 C (오픈소스 어댑터, src/ 패키지 구조 유지)
+from src.cbs_adapter import (
+    CBSAdapter,
+    CBSAdapterConfig,
+    CBSTimeoutError,
+    CBSNoSolutionError,
+)
+#from src.cbs_adapter import CBSAdapter, CBSAdapterConfig  # 역할 C (오픈소스 어댑터, src/ 패키지 구조 유지)
 from simulator import Simulator                            # 역할 B
 
+def save_cbs_log(
+    map_type,
+    size,
+    num_agents,
+    seed,
+    status,
+    planning_time,
+    timed_out=False,
+    makespan=None,
+    total_path_length=None,
+):
+    log_path = Path("outputs/logs/cbs_log.csv")
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    file_exists = log_path.exists()
+
+    with log_path.open("a", newline="", encoding="utf-8-sig") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=[
+                "timestamp",
+                "scenario",
+                "map_size",
+                "num_agents",
+                "seed",
+                "status",
+                "latency_sec",
+                "timed_out",
+                "makespan",
+                "total_path_length",
+            ],
+        )
+
+        if not file_exists:
+            writer.writeheader()
+
+        writer.writerow(
+            {
+                "timestamp": datetime.now().isoformat(timespec="seconds"),
+                "scenario": map_type,
+                "map_size": size,
+                "num_agents": num_agents,
+                "seed": seed,
+                "status": status,
+                "latency_sec": f"{planning_time:.6f}",
+                "timed_out": timed_out,
+                "makespan": makespan,
+                "total_path_length": total_path_length,
+            }
+        )
 
 def run_pipeline(map_type: str, size: int, num_agents: int, seed: int, solver_root: str | None):
     # ---- 1) 맵 생성 (역할 A) : grid_map, starts_rc, goals_rc 모두 (row,col) ----
@@ -37,12 +96,98 @@ def run_pipeline(map_type: str, size: int, num_agents: int, seed: int, solver_ro
 
     # ---- 2) 오픈소스 CBS 실행 (역할 C) : (row,col) in -> (row,col) out ----
     adapter = CBSAdapter(CBSAdapterConfig(solver_root=solver_root))
+    planning_start = time.perf_counter()
     try:
         padded_paths = adapter.plan(starts_rc, goals_rc, grid_map)  # {agent_id: [(row,col), ...]}
-    except (FileNotFoundError, RuntimeError) as e:
-        print(f"❌ [2/3] CBS 실행 실패: {e}")
+
+    except CBSTimeoutError as e:
+        planning_time = time.perf_counter() - planning_start
+        planning_status = "timeout"
+
+        print(f"❌ [2/3] CBS TIMEOUT")
+        print(f"    planning time = {planning_time:.6f} sec")
+        print(f"    {e}")
+        save_cbs_log(
+            map_type=map_type,
+            size=size,
+            num_agents=num_agents,
+            seed=seed,
+            status="timeout",
+            planning_time=planning_time,
+            timed_out=True,
+        )
         return None
+
+    except CBSNoSolutionError as e:
+        planning_time = time.perf_counter() - planning_start
+        planning_status = "no_solution"
+
+        print(f"❌ [2/3] CBS NO SOLUTION")
+        print(f"    planning time = {planning_time:.6f} sec")
+        print(f"    {e}")
+        save_cbs_log(
+            map_type=map_type,
+            size=size,
+            num_agents=num_agents,
+            seed=seed,
+            status="no_solution",
+            planning_time=planning_time,
+            timed_out=False,
+        )
+        return None
+
+    except (FileNotFoundError, RuntimeError) as e:
+        planning_time = time.perf_counter() - planning_start
+        planning_status = "error"
+
+        print(f"❌ [2/3] CBS ERROR")
+        print(f"    planning time = {planning_time:.6f} sec")
+        print(f"    {e}")
+        save_cbs_log(
+            map_type=map_type,
+            size=size,
+            num_agents=num_agents,
+            seed=seed,
+            status="error",
+            planning_time=planning_time,
+            timed_out=False,
+        )
+        return None
+    
+    planning_time = time.perf_counter() - planning_start
+    planning_status = "success"
+    # 각 agent가 최종 goal에 실제로 도착한 timestep 계산
+    arrival_times = []
+
+    for agent_id, path in padded_paths.items():
+        arrival = len(path) - 1
+
+        # CBSAdapter가 추가한 goal 위치 padding 제거
+        while arrival > 0 and path[arrival - 1] == path[-1]:
+            arrival -= 1
+
+        arrival_times.append(arrival)
+
+    # ---- MAPF 성능 지표 ----
+    makespan = max(arrival_times)
+    total_path_length = sum(arrival_times)
+    save_cbs_log(
+        map_type=map_type,
+        size=size,
+        num_agents=num_agents,
+        seed=seed,
+        status=planning_status,
+        planning_time=planning_time,
+        timed_out=False,
+        makespan=makespan,
+        total_path_length=total_path_length,
+    )
+
     print(f"[2/3] CBS 경로 생성 완료 : {len(padded_paths)}개 에이전트")
+    print(
+        f"    status={planning_status}, "
+        f"planning_time={planning_time:.6f} sec"
+    )
 
     # ---- 3) 시뮬레이터 검증 (역할 B) : (row,col) 그대로 전달, 변환 불필요 ----
     grid_3d = Simulator.build_grid_3d(grid_map)
